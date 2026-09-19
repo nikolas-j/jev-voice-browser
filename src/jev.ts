@@ -70,6 +70,7 @@ export function buildQuestions(transcript: string, page: PageSnapshot) {
       {
         click_link: "Open a link or jump to a section that exists on the current page (see `page.links`)",
         search: "Look up a new topic on Wikipedia that is not linked from the current page",
+        answer: "Answer a question about what this page says, using a passage already on the page (see `page.paragraphs`)",
         scroll_down: "Scroll further down / read more of the current page",
         scroll_up: "Scroll back up toward the top of the current page",
         go_back: "Return to the previous page",
@@ -83,6 +84,13 @@ export function buildQuestions(transcript: string, page: PageSnapshot) {
     search_query: choice(
       "If the user wants to look up a new topic, which span of `user_request` is the topic itself — the exact words to type into Wikipedia search, without command words like 'search for', 'look up', 'go to', 'show me'?",
       spanCriteria,
+    ),
+    answer_passage: choice(
+      {
+        question: "If the user is asking a question about this page, which entry in `page.paragraphs` answers it?",
+        note: "Only the listed paragraph ids are eligible. Choose NONE if no paragraph on this page answers the question.",
+      },
+      Object.fromEntries([[NO_LINK, "No paragraph on this page answers the question"], ...page.paragraphs.map((x) => [x.id, null])]),
     ),
     goal_satisfied: noul(
       "Does the current page (see `page.title` and `page.summary`) already show what the user is asking for, so that no navigation is needed?",
@@ -103,6 +111,7 @@ export function buildState(transcript: string, page: PageSnapshot) {
       summary: page.summary,
       headings: page.headings,
       links: page.links.map((l) => ({ id: l.id, text: l.text, context: l.context })),
+      paragraphs: page.paragraphs,
     },
   };
 }
@@ -118,6 +127,7 @@ export interface Decision {
   intent: ChoiceAnswer;
   targetLink: ChoiceAnswer;
   searchQuery: ChoiceAnswer;
+  answerPassage: ChoiceAnswer;
   goalSatisfied: number;
 }
 
@@ -166,6 +176,7 @@ export async function decide(client: TypeSafeClient, runId: string, transcript: 
   const chunkAnswers = chunkKeys.map((k) => answers[k] as ChoiceAnswer);
   const intent = answers.intent as ChoiceAnswer;
   const searchQuery = answers.search_query as ChoiceAnswer;
+  const answerPassage = answers.answer_passage as ChoiceAnswer;
   const goalSatisfied = (answers.goal_satisfied as { noul: number }).noul;
 
   let targetLink: ChoiceAnswer;
@@ -190,7 +201,7 @@ export async function decide(client: TypeSafeClient, runId: string, transcript: 
     targetLink = d2.answers.target_link;
   }
 
-  return { model: d.model, intent, targetLink, searchQuery, goalSatisfied };
+  return { model: d.model, intent, targetLink, searchQuery, answerPassage, goalSatisfied };
 }
 
 /** Best-effort merge of per-chunk distributions for display when no final round is run. */
@@ -208,4 +219,4 @@ export function topK(probabilities: Record<string, number>, k = 5): { id: string
     .slice(0, k);
 }
 
-export const INTENTS: Intent[] = ["click_link", "search", "scroll_down", "scroll_up", "go_back", "go_forward", "scroll_top", "scroll_bottom", "reload", "unclear"];
+export const INTENTS: Intent[] = ["click_link", "search", "answer", "scroll_down", "scroll_up", "go_back", "go_forward", "scroll_top", "scroll_bottom", "reload", "unclear"];

@@ -28,13 +28,13 @@ browser.onFeedback = (runId, correct) => {
 };
 
 // Remember the last decision per run so the "done" card can say how sure it was.
-const lastDecision = new Map<string, { top: number; confident: boolean }>();
+const lastDecision = new Map<string, { top: number; confident: boolean; answer: boolean }>();
 
 bus.on("event", (ev) => {
   if (ev.type === "decision") {
     const cands: Candidate[] = (ev.target ?? ev.searchQuery)?.candidates ?? [];
     const top = cands[0]?.probability ?? ev.intentConfidence;
-    lastDecision.set(ev.runId, { top, confident: ev.routing === "execute" });
+    lastDecision.set(ev.runId, { top, confident: ev.routing === "execute", answer: ev.intent === "answer" });
     if (ev.routing !== "execute") {
       void browser.pushOverlay({
         phase: "clarify",
@@ -54,6 +54,7 @@ bus.on("event", (ev) => {
       description: ev.description,
       top: d?.top,
       confident: Boolean(d?.confident),
+      answer: Boolean(d?.answer),
     });
   } else if (ev.type === "error") {
     void browser.pushOverlay({ phase: "error", runId: ev.runId, message: ev.message });

@@ -34,6 +34,14 @@
     links.push({ text, href, context });
   });
 
+  // Paragraphs are answer candidates: KODA never writes an answer, it points at one.
+  // Same filter is used to find the node again when highlighting, so index == id.
+  const paras = Array.from(root.querySelectorAll("p")).filter((p) => clean(p.textContent).length > 120);
+  const paragraphs = paras.slice(0, 40).map((p, i) => ({
+    id: "P" + String(i + 1).padStart(3, "0"),
+    text: clean(p.textContent).slice(0, 260),
+  }));
+
   const firstPara = Array.from(root.querySelectorAll("p")).find((p) => clean(p.textContent).length > 80);
   const headings = Array.from(document.querySelectorAll(".mw-heading2 h2, h2 .mw-headline, h2"))
     .map((h) => clean(h.textContent))
@@ -45,5 +53,6 @@
     headings: Array.from(new Set(headings)).slice(0, 40),
     sections,
     links,
+    paragraphs,
   };
 })()

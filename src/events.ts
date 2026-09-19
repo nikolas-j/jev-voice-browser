@@ -9,6 +9,7 @@ export type Intent =
   | "search"
   | "scroll_down"
   | "scroll_up"
+  | "answer"
   | "go_back"
   | "go_forward"
   | "scroll_top"

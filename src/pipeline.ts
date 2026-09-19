@@ -53,6 +53,12 @@ export class Pipeline {
         const l = page.links.find((x) => x.id === c.id);
         return { id: c.id, label: c.id === NO_LINK ? "No matching link" : `${l?.text ?? c.id}`, probability: c.probability, href: l?.href };
       });
+      const answerTop = topK(d.answerPassage.probabilities, 5);
+      const answerCandidates: Candidate[] = answerTop.map((c) => ({
+        id: c.id,
+        label: c.id === NO_LINK ? "No passage on this page answers that" : (page.paragraphs.find((x) => x.id === c.id)?.text ?? c.id),
+        probability: c.probability,
+      }));
       const queryTop = topK(d.searchQuery.probabilities, 5);
       const queryCandidates: Candidate[] = queryTop.map((c) => ({ id: c.id, label: c.id, probability: c.probability }));
 
@@ -69,6 +75,11 @@ export class Pipeline {
         const best = queryTop[0];
         if (!best || best.probability < THRESHOLDS.query.confirm) routing = "escalate";
         else if (best.probability < bar.value) routing = "confirm";
+      } else if (intent === "answer") {
+        bar = executeBar("link");
+        const best = answerTop[0];
+        if (!best || best.id === NO_LINK || best.probability < THRESHOLDS.link.confirm) routing = "escalate";
+        else if (best.probability < bar.value) routing = "confirm";
       } else if (intent === "unclear") {
         routing = "escalate";
       }
@@ -80,7 +91,9 @@ export class Pipeline {
         intentProbabilities: d.intent.probabilities,
         intentConfidence: d.intent.confidence,
         goalSatisfied: goal,
-        target: intent === "click_link" ? { candidates: linkCandidates, confidence: d.targetLink.confidence } : undefined,
+        target: intent === "click_link" ? { candidates: linkCandidates, confidence: d.targetLink.confidence }
+              : intent === "answer" ? { candidates: answerCandidates, confidence: d.answerPassage.confidence }
+              : undefined,
         searchQuery: intent === "search" ? { candidates: queryCandidates, confidence: d.searchQuery.confidence } : undefined,
         routing,
         bar,
@@ -117,7 +130,7 @@ export class Pipeline {
       }
 
       if (routing === "execute") {
-        await this.execute(runId, page, intent, linkTop[0]?.id, queryTop[0]?.id);
+        await this.execute(runId, page, intent, intent === "answer" ? answerTop[0]?.id : linkTop[0]?.id, queryTop[0]?.id);
         this.finish(runId, startedAt);
       } else {
         this.pending.set(runId, { runId, page, intent, startedAt });
@@ -144,7 +157,7 @@ export class Pipeline {
     // Ground truth, free: whatever the human picked is what the model should have picked.
     calibration.resolveByChoice(runId, candidateId);
     bus.publish({ type: "calibration", summary: calibration.summary() });
-    if (p.intent === "click_link") await this.execute(runId, p.page, "click_link", candidateId, undefined);
+    if (p.intent === "click_link" || p.intent === "answer") await this.execute(runId, p.page, p.intent, candidateId, undefined);
     else if (p.intent === "search") await this.execute(runId, p.page, "search", undefined, candidateId);
     else await this.execute(runId, p.page, p.intent, undefined, undefined);
     this.finish(runId, p.startedAt);
@@ -182,6 +195,14 @@ export class Pipeline {
           description = "Go back";
           await this.browser.back();
           break;
+        case "answer": {
+          const para = page.paragraphs.find((x) => x.id === linkId);
+          if (!para) throw new Error("No passage selected");
+          description = para.text;
+          detail = "highlighted on the page";
+          await this.browser.highlightParagraph(para.id);
+          break;
+        }
         case "go_forward":
           description = "Go forward";
           await this.browser.forward();

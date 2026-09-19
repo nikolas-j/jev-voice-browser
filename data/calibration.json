@@ -108,5 +108,49 @@
     "routing": "execute",
     "ts": 1789813437156,
     "resolved": false
+  },
+  {
+    "runId": "run-mu890m8k-1",
+    "kind": "query",
+    "predictedId": "Finland",
+    "predictedLabel": "Finland",
+    "probability": 1,
+    "routing": "execute",
+    "ts": 1789813955952,
+    "resolved": false
+  },
+  {
+    "runId": "run-mu8915ms-5",
+    "kind": "link",
+    "predictedId": "S001",
+    "predictedLabel": "Names and etymology",
+    "probability": 1,
+    "routing": "execute",
+    "ts": 1789813982466,
+    "resolved": false
+  },
+  {
+    "runId": "run-mu891c4z-6",
+    "kind": "link",
+    "predictedId": "S001",
+    "predictedLabel": "Names and etymology",
+    "probability": 0.92,
+    "routing": "execute",
+    "ts": 1789813990667,
+    "resolved": true,
+    "correct": false,
+    "via": "feedback"
+  },
+  {
+    "runId": "run-mu8935uw-13",
+    "kind": "link",
+    "predictedId": "L009",
+    "predictedLabel": "Helsinki",
+    "probability": 0.99,
+    "routing": "execute",
+    "ts": 1789814075047,
+    "resolved": true,
+    "correct": true,
+    "via": "feedback"
   }
 ]

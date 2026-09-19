@@ -14,6 +14,7 @@ interface RawExtract {
   headings: string[];
   sections: { text: string; href: string; level: number }[];
   links: { text: string; href: string; context: string }[];
+  paragraphs: { id: string; text: string }[];
 }
 
 export interface PageLink {
@@ -29,6 +30,7 @@ export interface PageSnapshot {
   summary: string;
   headings: string[];
   links: PageLink[];
+  paragraphs: { id: string; text: string }[];
   extractMs: number;
 }
 
@@ -44,6 +46,7 @@ export interface OverlayState {
   confident?: boolean;
   ok?: boolean;
   description?: string;
+  answer?: boolean;
   message?: string;
   candidates?: { id: string; label: string; probability: number }[];
 }
@@ -123,6 +126,7 @@ export class WikiBrowser {
       summary: raw.summary,
       headings: raw.headings,
       links,
+      paragraphs: raw.paragraphs ?? [],
       extractMs: Math.round(performance.now() - t0),
     };
   }
@@ -173,6 +177,22 @@ export class WikiBrowser {
 
   async back() {
     await this.p.goBack({ waitUntil: "domcontentloaded" });
+  }
+
+  /** Scroll the chosen passage into view and flash it, so the answer is visible in the page itself. */
+  async highlightParagraph(id: string) {
+    const index = Number(id.replace(/^P/, "")) - 1;
+    await this.p.evaluate((i) => {
+      const root = document.querySelector("#mw-content-text") || document.body;
+      const clean = (t: string | null) => (t || "").replace(/\s+/g, " ").trim();
+      const paras = Array.from(root.querySelectorAll("p")).filter((p) => clean(p.textContent).length > 120);
+      const el = paras[i] as HTMLElement | undefined;
+      if (!el) return;
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      const prev = el.style.cssText;
+      el.style.cssText = prev + ";background:#E8F3EC;outline:2px solid #2D6A4F;outline-offset:4px;border-radius:4px;transition:background .3s";
+      setTimeout(() => { el.style.cssText = prev; }, 6000);
+    }, index);
   }
 
   async forward() {

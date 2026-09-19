@@ -96,6 +96,9 @@
 
   .done { display: flex; align-items: center; gap: 8px; font-size: 13px; }
   .done .txt { flex: 1; }
+  .passage { border-left: 3px solid #2D6A4F; background: #F5FAF7; border-radius: 0 8px 8px 0;
+             padding: 10px 12px; font-size: 13px; line-height: 1.55; color: #1A1A18; }
+  .passage .src { display: block; margin-top: 6px; font-size: 11px; color: #6B6560; }
   .rate { display: flex; gap: 6px; }
   .rate button { border: 1px solid #E8E4DE; background: #fff; border-radius: 8px; padding: 4px 9px;
                  font-size: 12px; cursor: pointer; color: #6B6560; }
@@ -273,7 +276,9 @@
       busy(false);
       setOpen(true);
       $("ask").classList.remove("hidden");
-      $("askT").textContent = s.escalated ? "I could not find a confident match" : "Which one did you mean?";
+      $("askT").textContent = s.escalated
+        ? (s.intent === "answer" ? "I could not find a passage that answers that" : "I could not find a confident match")
+        : (s.intent === "answer" ? "Which passage did you mean?" : "Which one did you mean?");
       $("askS").textContent = s.escalated
         ? "Nothing cleared the bar. Pick one, or rephrase."
         : `My best guess is only ${Math.round((s.top || 0) * 100)}% — below the bar I am allowed to act on.`;
@@ -288,7 +293,12 @@
       busy(false);
       $("ask").classList.add("hidden");
       $("done").classList.remove("hidden");
-      $("doneTxt").textContent = s.description || "Done";
+      if (s.answer) {
+        $("doneTxt").innerHTML = `<div class="passage">${escapeHtml(s.description || "")}<span class="src">from this page${
+          s.top ? ` · ${Math.round(s.top * 100)}% confident this passage answers it` : ""}</span></div>`;
+      } else {
+        $("doneTxt").textContent = s.description || "Done";
+      }
       setNote((s.confident ? `Acted on my own at ${Math.round((s.top || 0) * 100)}% confidence` : "Done") + (wakeOn ? " · still listening, just say the next thing" : ""), s.ok ? null : "bad");
     } else if (s.phase === "error") {
       busy(false);
