@@ -65,6 +65,8 @@ export type JevEvent =
       target?: { candidates: Candidate[]; confidence: number };
       searchQuery?: { candidates: Candidate[]; confidence: number };
       routing: "execute" | "confirm" | "escalate";
+      /** the bar this decision had to clear, and whether it came from measurement */
+      bar?: { value: number; source: "measured" | "default" };
       /** consequence class of the chosen control, and the bar it therefore has to clear */
       risk?: { klass: RiskClass; required: number; met: boolean; reason: string };
     }

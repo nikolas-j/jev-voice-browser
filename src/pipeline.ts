@@ -3,7 +3,7 @@ import type { TypeSafeClient } from "@typesafe-ai/sdk";
 import { WikiBrowser, type PageLink, type PageSnapshot } from "./browser.js";
 import { bus, type Candidate, type Intent } from "./events.js";
 import { decide, topK, NO_LINK } from "./jev.js";
-import { calibration } from "./calibration.js";
+import { calibration, TARGET_ACCURACY } from "./calibration.js";
 import { shadowCompare } from "./shadow.js";
 
 // Thresholds on the top probability of the chosen candidate. Tune on real usage.
@@ -11,6 +11,16 @@ export const THRESHOLDS = {
   link: { execute: 0.55, confirm: 0.15 },
   query: { execute: 0.35, confirm: 0.1 },
 };
+
+/** The bar for acting without asking. Once we have enough measured outcomes we stop using the
+ *  hand-picked default and use the lowest probability at which we were actually right often
+ *  enough. The system tunes its own decision boundary from its own reliability data. */
+export function executeBar(kind: "link" | "query"): { value: number; source: "measured" | "default" } {
+  const learned = calibration.suggestThreshold(TARGET_ACCURACY);
+  return learned === null
+    ? { value: THRESHOLDS[kind].execute, source: "default" }
+    : { value: Math.max(learned, THRESHOLDS[kind].confirm), source: "measured" };
+}
 
 interface Pending {
   runId: string;
@@ -48,14 +58,17 @@ export class Pipeline {
 
       // Confidence routing: code decides what a probability means for this action.
       let routing: "execute" | "confirm" | "escalate" = "execute";
+      let bar: { value: number; source: "measured" | "default" } | undefined;
       if (intent === "click_link") {
+        bar = executeBar("link");
         const best = linkTop[0];
         if (!best || best.id === NO_LINK || best.probability < THRESHOLDS.link.confirm) routing = "escalate";
-        else if (best.probability < THRESHOLDS.link.execute) routing = "confirm";
+        else if (best.probability < bar.value) routing = "confirm";
       } else if (intent === "search") {
+        bar = executeBar("query");
         const best = queryTop[0];
         if (!best || best.probability < THRESHOLDS.query.confirm) routing = "escalate";
-        else if (best.probability < THRESHOLDS.query.execute) routing = "confirm";
+        else if (best.probability < bar.value) routing = "confirm";
       } else if (intent === "unclear") {
         routing = "escalate";
       }
@@ -70,6 +83,7 @@ export class Pipeline {
         target: intent === "click_link" ? { candidates: linkCandidates, confidence: d.targetLink.confidence } : undefined,
         searchQuery: intent === "search" ? { candidates: queryCandidates, confidence: d.searchQuery.confidence } : undefined,
         routing,
+        bar,
       });
 
       // Log what we predicted and how sure we were. Truth arrives later, from the human.

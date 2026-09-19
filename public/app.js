@@ -68,6 +68,13 @@ function renderCalibration(sum) {
       .join("");
   }
 
+  // The decision boundary the system is actually using right now, and where it came from.
+  if (sum.suggested !== null && sum.suggested !== undefined) {
+    $("c-bar").innerHTML = `Acting alone above <b>${pct(sum.suggested)}</b> <span class="src">· learned from your ${sum.resolved} resolved decisions</span>, the lowest confidence where it was still right ${pct(sum.target)} of the time.`;
+  } else {
+    $("c-bar").innerHTML = `Acting alone above <b>55%</b> <span class="src default">· hand-picked default</span>. Resolve ${Math.max(0, 8 - sum.resolved)} more and it will set its own bar from measurement.`;
+  }
+
   // Plain-language read of the gap, which is the whole point of the panel.
   const note = $("c-note");
   if (!sum.resolved) {

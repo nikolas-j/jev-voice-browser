@@ -45,8 +45,13 @@ export interface CalibrationSummary {
   buckets: Bucket[];
   /** accuracy on the most-confident X% of resolved decisions */
   riskCoverage: { coverage: number; accuracy: number; threshold: number }[];
+  /** the act-alone threshold our own data supports, or null when there is not enough evidence */
+  suggested: number | null;
+  /** accuracy we are targeting when we act without asking */
+  target: number;
 }
 
+export const TARGET_ACCURACY = 0.9; // act alone only where we measured >= 90% correct
 const BINS = 5; // 5 bins, not 10: a live demo produces tens of decisions, not thousands
 
 export class Calibration {
@@ -146,6 +151,8 @@ export class Calibration {
       brier,
       buckets,
       riskCoverage,
+      suggested: this.suggestThreshold(TARGET_ACCURACY),
+      target: TARGET_ACCURACY,
     };
   }
 
