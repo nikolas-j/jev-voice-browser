@@ -10,5 +10,27 @@
     "resolved": true,
     "correct": true,
     "via": "feedback"
+  },
+  {
+    "runId": "run-mu87vywa-1",
+    "kind": "query",
+    "predictedId": "patch",
+    "predictedLabel": "patch",
+    "probability": 0.92,
+    "routing": "execute",
+    "ts": 1789812059638,
+    "resolved": true,
+    "correct": false,
+    "via": "feedback"
+  },
+  {
+    "runId": "run-mu87wgn0-2",
+    "kind": "query",
+    "predictedId": "Germany",
+    "predictedLabel": "Germany",
+    "probability": 1,
+    "routing": "execute",
+    "ts": 1789812082473,
+    "resolved": false
   }
 ]

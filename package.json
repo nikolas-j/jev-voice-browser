@@ -1,9 +1,9 @@
 {
-  "name": "jev-voice-wiki",
+  "name": "paula",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Voice-driven Wikipedia navigation powered by TypeSafe Jev, with a live cost/latency dashboard",
+  "description": "Paula — an in-page assistant that acts when it is sure, asks when it is not, and measures whether its confidence was honest",
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",

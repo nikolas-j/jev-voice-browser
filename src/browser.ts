@@ -65,8 +65,10 @@ export class WikiBrowser {
   async start(headless = false, startUrl = `${WIKI}/wiki/Main_Page`) {
     // BROWSER_CHANNEL=chrome|msedge drives the system browser; unset uses Playwright's bundled Chromium.
     const channel = process.env.BROWSER_CHANNEL || undefined;
-    this.browser = await chromium.launch({ headless, channel });
-    const ctx = await this.browser.newContext({ viewport: { width: 1280, height: 900 } });
+    this.browser = await chromium.launch({ headless, channel, args: headless ? [] : ["--start-maximized"] });
+    // viewport: null makes the page match the real window, so a fixed 900px viewport cannot
+    // push the overlay below the visible area on a shorter screen.
+    const ctx = await this.browser.newContext(headless ? { viewport: { width: 1280, height: 900 } } : { viewport: null });
     // Voice happens in the page itself, so the page needs the mic.
     await ctx.grantPermissions(["microphone"]).catch(() => {});
     // One bridge from the overlay back into Node.
@@ -82,7 +84,15 @@ export class WikiBrowser {
     });
     await ctx.addInitScript({ content: OVERLAY_SCRIPT });
     this.page = await ctx.newPage();
+    // addInitScript covers document-start; this covers anything that slipped through.
+    this.page.on("load", () => { void this.ensureOverlay(); });
+    this.page.on("console", (m) => {
+      const t = m.text();
+      if (t.startsWith("[sextant]")) console.log("  page:", t);
+    });
+    this.page.on("pageerror", (e) => console.warn("  page error:", e.message));
     await this.page.goto(startUrl, { waitUntil: "domcontentloaded" });
+    await this.ensureOverlay();
   }
 
   async stop() {
@@ -114,6 +124,40 @@ export class WikiBrowser {
       links,
       extractMs: Math.round(performance.now() - t0),
     };
+  }
+
+  /** Inject the overlay if it is not already there. Safe to call repeatedly. */
+  async ensureOverlay() {
+    try {
+      const present = await this.p.evaluate(() => Boolean(document.getElementById("sx-host")));
+      if (!present) {
+        await this.p.evaluate(OVERLAY_SCRIPT);
+        const ok = await this.p.evaluate(() => Boolean(document.getElementById("sx-host")));
+        console.log(ok ? "  overlay injected" : "  overlay injection produced no host element");
+      }
+      console.log("  overlay diag:", JSON.stringify(await this.p.evaluate(() => {
+        const h = document.getElementById("sx-host");
+        if (!h) return { host: "MISSING" };
+        const hs = getComputedStyle(h);
+        const hr = h.getBoundingClientRect();
+        const sr = (h as HTMLElement & { shadowRoot: ShadowRoot | null }).shadowRoot;
+        const pill = sr ? (sr.getElementById("pill") as HTMLElement | null) : null;
+        const ps = pill ? getComputedStyle(pill) : null;
+        const pr = pill ? pill.getBoundingClientRect() : null;
+        return {
+          parent: h.parentElement ? h.parentElement.tagName : null,
+          shadow: Boolean(sr),
+          shadowChildren: sr ? sr.childElementCount : -1,
+          hostStyle: { pos: hs.position, display: hs.display, vis: hs.visibility, op: hs.opacity, z: hs.zIndex },
+          hostRect: { x: Math.round(hr.x), y: Math.round(hr.y), w: Math.round(hr.width), h: Math.round(hr.height) },
+          pill: pill ? { display: ps!.display, vis: ps!.visibility, op: ps!.opacity,
+                         rect: { x: Math.round(pr!.x), y: Math.round(pr!.y), w: Math.round(pr!.width), h: Math.round(pr!.height) } } : "MISSING",
+          viewport: { w: innerWidth, h: innerHeight },
+        };
+      })));
+    } catch (err) {
+      console.warn("  overlay injection failed:", err instanceof Error ? err.message : err);
+    }
   }
 
   /** Push assistant state into the page overlay. Never let UI failures break the run. */

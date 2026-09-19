@@ -6,7 +6,7 @@ import { noul } from "@typesafe-ai/sdk";
 import { WikiBrowser } from "./browser.js";
 import { createClient } from "./jev.js";
 import { Pipeline } from "./pipeline.js";
-import { bus } from "./events.js";
+import { bus, type Candidate } from "./events.js";
 import { calibration } from "./calibration.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -32,7 +32,7 @@ const lastDecision = new Map<string, { top: number; confident: boolean }>();
 
 bus.on("event", (ev) => {
   if (ev.type === "decision") {
-    const cands = (ev.target ?? ev.searchQuery)?.candidates ?? [];
+    const cands: Candidate[] = (ev.target ?? ev.searchQuery)?.candidates ?? [];
     const top = cands[0]?.probability ?? ev.intentConfidence;
     lastDecision.set(ev.runId, { top, confident: ev.routing === "execute" });
     if (ev.routing !== "execute") {

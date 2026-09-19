@@ -2,18 +2,17 @@
 // Plain JS on purpose (no bundler helpers exist in page context) and wrapped in a shadow
 // root so the host page's CSS can never touch it, and ours can never touch the host.
 (() => {
-  if (window.__sxMounted) return;
-  // addInitScript runs at document-start; wait for a document to attach to.
-  if (!document.documentElement) {
-    document.addEventListener("DOMContentLoaded", () => { window.__sxMounted = false; mount(); }, { once: true });
-    return;
-  }
-  mount();
-  function mount() {
-  if (window.__sxMounted) return;
-  window.__sxMounted = true;
+  // addInitScript runs at document-start, when <body> does not exist yet. Chrome does not
+  // render elements parented outside <body>, so wait for it before mounting.
+  const boot = () => { if (!window.__sxMounted) mount(); };
+  if (document.body) boot();
+  else document.addEventListener("DOMContentLoaded", boot, { once: true });
 
-  const ACCENT = "#D97757";
+  function mount() {
+  window.__sxMounted = true;
+  console.log('[paula] mounting, readyState=' + document.readyState);
+
+  const ACCENT = "#2D6A4F"; // forest green
   const host = document.createElement("div");
   host.id = "sx-host";
   host.style.cssText = "position:fixed;right:20px;bottom:20px;z-index:2147483647;";
@@ -59,12 +58,12 @@
   .chips { display: flex; flex-wrap: wrap; gap: 7px; }
   .chip { border: 1px solid #E8E4DE; background: #fff; border-radius: 9999px; padding: 6px 12px;
           font-size: 12.5px; color: #1A1A18; cursor: pointer; transition: all .12s; text-align: left; }
-  .chip:hover { border-color: ${ACCENT}; color: ${ACCENT}; background: #FDF6F3; }
+  .chip:hover { border-color: ${ACCENT}; color: ${ACCENT}; background: #F1F7F4; }
 
   .row { display: flex; gap: 8px; align-items: center; }
   .inp { flex: 1; border: 1px solid #E8E4DE; border-radius: 10px; padding: 10px 12px; font: inherit;
          color: #1A1A18; outline: none; background: #fff; min-width: 0; }
-  .inp:focus { border-color: ${ACCENT}; box-shadow: 0 0 0 3px rgba(217,119,87,.14); }
+  .inp:focus { border-color: ${ACCENT}; box-shadow: 0 0 0 3px rgba(45,106,79,.16); }
   .inp::placeholder { color: #A8A29B; }
   .btn { border: 0; background: ${ACCENT}; color: #fff; border-radius: 10px; padding: 10px 14px;
          font: inherit; font-weight: 550; cursor: pointer; white-space: nowrap; }
@@ -77,14 +76,14 @@
   .mic svg { width: 17px; height: 17px; }
 
   /* uncertainty */
-  .ask { border: 1px solid #EADFD6; background: #FDF8F5; border-radius: 12px; padding: 12px; }
+  .ask { border: 1px solid #DCE9E2; background: #F5FAF7; border-radius: 12px; padding: 12px; }
   .ask .t { font-weight: 600; font-size: 13px; margin-bottom: 2px; }
   .ask .s { color: #6B6560; font-size: 12.5px; margin-bottom: 10px; }
   .cand { display: flex; flex-direction: column; gap: 6px; }
   .cand button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
                  border: 1px solid #E8E4DE; background: #fff; border-radius: 10px; padding: 8px 10px;
                  cursor: pointer; font: inherit; }
-  .cand button:hover { border-color: ${ACCENT}; background: #FDF6F3; }
+  .cand button:hover { border-color: ${ACCENT}; background: #F1F7F4; }
   .cand .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .cand .meter { width: 46px; height: 5px; border-radius: 3px; background: #F0EDE8; overflow: hidden; flex: 0 0 46px; }
   .cand .meter i { display: block; height: 100%; background: ${ACCENT}; border-radius: 3px; }
@@ -108,7 +107,7 @@
   <div class="panel hidden" id="panel">
     <div class="hd">
       <span class="mark">${micSvg()}</span>
-      <h1 id="title">Sextant</h1>
+      <h1 id="title">Paula</h1>
       <button class="x" id="close" title="Collapse">&times;</button>
     </div>
     <div class="bd">
@@ -141,7 +140,7 @@
 
   <button class="pill" id="pill">
     <span class="mark">${micSvg()}</span>
-    <span class="lbl">Sextant</span>
+    <span class="lbl">Paula</span>
     <span class="sub" id="pillSub">ask this page</span>
   </button>
 </div>`;
@@ -150,7 +149,8 @@
     return `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11z"/></svg>`;
   }
 
-  document.documentElement.appendChild(host);
+  document.body.appendChild(host);
+  console.log('[paula] overlay mounted into <body>');
   const $ = (id) => root.getElementById(id);
   const send = (msg) => window.__sxBridge && window.__sxBridge(JSON.stringify(msg));
 
@@ -269,4 +269,4 @@
     $("mic").onclick = () => { setOpen(true); on ? rec.stop() : rec.start(); };
   }
   }
-})();
+})()
