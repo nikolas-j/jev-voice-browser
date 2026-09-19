@@ -9,6 +9,29 @@ Voice-controlled Wikipedia navigation where **TypeSafe's Jev (System One)** make
                                                   dashboard: model, tokens, $, ms, probabilities
 ```
 
+
+## Trust, measured
+
+This branch adds the part that makes a confidence threshold mean something: we
+measure whether the model's probabilities are true, from the session itself.
+
+- **Calibration ledger** (`src/calibration.ts`) logs every decision with the
+  probability Jev gave the option it picked. Ground truth arrives from normal use:
+  the candidate you pick in the confirm tier is the truth, and executed runs can be
+  rated right or wrong in one click. Reliability buckets, ECE, Brier and a
+  risk-coverage curve are computed from those pairs and shown live. Persisted to
+  `data/calibration.json`.
+- **Measured baseline** (`src/shadow.ts`, optional) sends the identical decision to
+  a frontier LLM and measures latency, tokens, cost and agreement, so the speed and
+  cost multiples are measurements rather than citations. Set `ANTHROPIC_API_KEY` to
+  enable; without it nothing changes.
+
+Endpoints: `GET /calibration`, `POST /feedback` `{runId, correct}`,
+`POST /calibration/reset`.
+
+See `PITCH.md` for the argument, including an honest account of what is and is not
+new here.
+
 ## Run it
 
 ```sh
