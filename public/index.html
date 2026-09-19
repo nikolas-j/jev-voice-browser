@@ -35,6 +35,36 @@
     <div class="interim" id="interim"></div>
   </section>
 
+  <section class="calib" id="calib">
+    <div class="calib-head">
+      <h2>Measured calibration</h2>
+      <button id="calib-reset" class="ghost" title="Clear the ledger">reset</button>
+    </div>
+
+    <div class="calib-hero">
+      <div class="hero-n" id="c-acc">—</div>
+      <div class="hero-k">measured accuracy<br /><span id="c-basis" class="muted-s">no ground truth yet</span></div>
+    </div>
+
+    <div class="calib-stats">
+      <div class="stat"><span class="k">ECE</span><span class="v" id="c-ece">—</span></div>
+      <div class="stat"><span class="k">Brier</span><span class="v" id="c-brier">—</span></div>
+      <div class="stat"><span class="k">logged</span><span class="v" id="c-total">0</span></div>
+    </div>
+
+    <div class="legend" id="c-legend">
+      <span class="lg"><i class="sw sw-pred"></i>Jev said</span>
+      <span class="lg"><i class="sw sw-obs"></i>actually right</span>
+    </div>
+
+    <div id="c-buckets" class="rel"></div>
+
+    <div class="calib-note" id="c-note">
+      Confirm a candidate, or rate an executed run, and this fills in. Thresholds should come
+      from this curve, not from a vendor's claim.
+    </div>
+  </section>
+
   <section class="timeline-wrap">
     <div class="timeline-head">
       <h2>Live run log</h2>

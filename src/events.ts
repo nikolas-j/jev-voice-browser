@@ -1,5 +1,8 @@
 // Event log shared by the pipeline, server, and dashboard.
 import { EventEmitter } from "node:events";
+import type { CalibrationSummary } from "./calibration.js";
+
+export type RiskClass = "navigational" | "data_entry" | "financial" | "destructive";
 
 export type Intent =
   | "click_link"
@@ -43,10 +46,13 @@ export type JevEvent =
       target?: { candidates: Candidate[]; confidence: number };
       searchQuery?: { candidates: Candidate[]; confidence: number };
       routing: "execute" | "confirm" | "escalate";
+      /** consequence class of the chosen control, and the bar it therefore has to clear */
+      risk?: { klass: RiskClass; required: number; met: boolean; reason: string };
     }
   | { type: "action"; runId: string; description: string; durationMs: number; ok: boolean; detail?: string }
   | { type: "run_done"; runId: string; totalMs: number; totalCostUsd: number }
   | { type: "error"; runId: string; message: string }
+  | { type: "calibration"; summary: CalibrationSummary }
   | { type: "totals"; runs: number; calls: number; inputTokens: number; costUsd: number; modelMs: number; wallMs: number };
 
 export class EventBus extends EventEmitter {

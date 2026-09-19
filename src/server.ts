@@ -7,6 +7,7 @@ import { WikiBrowser } from "./browser.js";
 import { createClient } from "./jev.js";
 import { Pipeline } from "./pipeline.js";
 import { bus } from "./events.js";
+import { calibration } from "./calibration.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT ?? 3000);
@@ -28,6 +29,7 @@ app.get("/events", (req, res) => {
   res.flushHeaders();
   const send = (ev: unknown) => res.write(`data: ${JSON.stringify(ev)}\n\n`);
   bus.snapshot().forEach(send);
+  send({ type: "calibration", summary: calibration.summary() });
   bus.on("event", send);
   const ping = setInterval(() => res.write(": ping\n\n"), 15_000);
   req.on("close", () => {
@@ -58,6 +60,23 @@ app.post("/goto", async (req, res) => {
   const { url } = req.body as { url?: string };
   if (!url || !/^https:\/\/en\.wikipedia\.org\//.test(url)) return res.status(400).json({ error: "en.wikipedia.org URL required" });
   await browser.goto(url);
+  res.json({ ok: true });
+});
+
+// Explicit ground truth for a run that executed without asking.
+app.post("/feedback", (req, res) => {
+  const { runId, correct } = req.body as { runId?: string; correct?: boolean };
+  if (!runId || typeof correct !== "boolean") return res.status(400).json({ error: "runId and correct required" });
+  const hit = calibration.resolveByFeedback(runId, correct);
+  bus.publish({ type: "calibration", summary: calibration.summary() });
+  res.json({ ok: hit });
+});
+
+app.get("/calibration", (_req, res) => res.json(calibration.summary()));
+
+app.post("/calibration/reset", (_req, res) => {
+  calibration.reset();
+  bus.publish({ type: "calibration", summary: calibration.summary() });
   res.json({ ok: true });
 });
 

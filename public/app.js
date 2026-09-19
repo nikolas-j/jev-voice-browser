@@ -39,8 +39,54 @@ function bars(cands, { clickable, runId, best } = {}) {
     .join("")}</div>`;
 }
 
+// ---- Measured calibration -------------------------------------------------
+// Reliability: for each confidence bucket, what Jev claimed vs how often it was right.
+function renderCalibration(sum) {
+  $("c-total").textContent = sum.total;
+  $("c-ece").textContent = sum.resolved ? sum.ece.toFixed(3) : "—";
+  $("c-brier").textContent = sum.resolved ? sum.brier.toFixed(3) : "—";
+  $("c-acc").textContent = sum.resolved ? pct(sum.accuracy) : "—";
+  $("c-basis").textContent = sum.resolved
+    ? `on ${sum.resolved} decision${sum.resolved === 1 ? "" : "s"} with ground truth`
+    : "no ground truth yet";
+
+  const used = sum.buckets.filter((b) => b.n > 0);
+  $("c-legend").style.display = used.length ? "flex" : "none";
+  if (!used.length) {
+    $("c-buckets").innerHTML = `<div class="rel-empty">Confirm a candidate or rate a run to start the curve.</div>`;
+  } else {
+    $("c-buckets").innerHTML = used
+      .map(
+        (b) => `<div class="rel-row">
+          <span class="rng">${b.label}<b>n=${b.n}</b></span>
+          <span class="rel-pair">
+            <span class="rel-bar"><span class="rel-track"><span class="rel-fill pred" style="width:${Math.max(1, b.meanPredicted * 100)}%"></span></span><span class="rel-val">${pct(b.meanPredicted)}</span></span>
+            <span class="rel-bar"><span class="rel-track"><span class="rel-fill obs" style="width:${Math.max(1, b.observed * 100)}%"></span></span><span class="rel-val">${pct(b.observed)}</span></span>
+          </span>
+        </div>`,
+      )
+      .join("");
+  }
+
+  // Plain-language read of the gap, which is the whole point of the panel.
+  const note = $("c-note");
+  if (!sum.resolved) {
+    note.innerHTML = "Confirm a candidate, or rate an executed run, and this fills in. Thresholds should come from this curve, not from a vendor's claim.";
+  } else if (sum.resolved < 8) {
+    note.innerHTML = `Too few samples to claim a threshold yet — <b>${sum.resolved}</b> so far, want at least 8.`;
+  } else {
+    const gap = sum.buckets.filter((b) => b.n > 0).reduce((w, b) => Math.max(w, Math.abs(b.observed - b.meanPredicted)), 0);
+    note.innerHTML = gap <= 0.1
+      ? `Stated confidence tracks reality to within <b>${pct(gap)}</b> on this run. The numbers mean what they say.`
+      : `Worst bucket is off by <b>${pct(gap)}</b> — stated confidence is not yet matching outcomes here.`;
+  }
+}
+
 function handle(ev) {
   switch (ev.type) {
+    case "calibration":
+      renderCalibration(ev.summary);
+      return;
     case "totals":
       $("t-runs").textContent = ev.runs;
       $("t-calls").textContent = ev.calls;
@@ -96,7 +142,10 @@ function handle(ev) {
       return;
     case "run_done": {
       const r = getRun(ev.runId);
-      r.el.querySelector(".run-meta").innerHTML = `<span class="done">end-to-end <b>${fmtMs(ev.totalMs)}</b> · <span class="cost">${fmtUsd(ev.totalCostUsd)}</span></span>`;
+      r.el.querySelector(".run-meta").innerHTML =
+        `<span class="done">end-to-end <b>${fmtMs(ev.totalMs)}</b> · <span class="cost">${fmtUsd(ev.totalCostUsd)}</span></span>` +
+        `<span class="rate" data-run="${ev.runId}" title="Did it do what you meant? This is the ground truth the calibration curve is built from.">` +
+        `<button data-correct="1">✓ right</button><button data-correct="0">✗ wrong</button></span>`;
       setBusy(false);
       return;
     }
@@ -106,6 +155,22 @@ function handle(ev) {
       return;
   }
 }
+
+// Ground-truth feedback on an executed run
+timeline.addEventListener("click", async (e) => {
+  const btn = e.target.closest(".rate button");
+  if (!btn) return;
+  const wrap = btn.closest(".rate");
+  if (wrap.classList.contains("done")) return;
+  const correct = btn.dataset.correct === "1";
+  wrap.classList.add("done");
+  btn.classList.add(correct ? "picked-ok" : "picked-bad");
+  await fetch("/feedback", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ runId: wrap.dataset.run, correct }),
+  });
+});
 
 // Candidate confirmation
 timeline.addEventListener("click", async (e) => {
@@ -141,6 +206,10 @@ async function send(text, source) {
 $("send").onclick = () => { send($("text").value, "text"); $("text").value = ""; };
 $("text").addEventListener("keydown", (e) => { if (e.key === "Enter") $("send").click(); });
 $("clear").onclick = () => { timeline.innerHTML = ""; runs.clear(); };
+$("calib-reset").onclick = async () => {
+  if (!confirm("Clear the measured calibration ledger?")) return;
+  await fetch("/calibration/reset", { method: "POST" });
+};
 
 // Voice: Web Speech API
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;

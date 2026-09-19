@@ -93,3 +93,57 @@ button.ghost { background: transparent; color: var(--muted); }
 .done { color: var(--muted); font-size: 12px; }
 .done b { color: var(--text); }
 .done .cost { color: var(--cost); }
+
+
+/* ---------- Measured calibration panel ----------
+   Two series (predicted vs observed) on the dark panel surface.
+   Palette validated with the dataviz validator against #161b22:
+   lightness band, chroma floor, CVD separation, normal-vision floor, contrast — all pass. */
+:root { --pred: #3f9fd4; --obs: #41a94a; }
+
+.calib {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  padding: 16px 18px; align-self: start; display: flex; flex-direction: column; gap: 12px;
+}
+.calib-head { display: flex; align-items: baseline; justify-content: space-between; }
+.calib-head h2 { font-size: 13px; margin: 0; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+
+.calib-hero { display: flex; align-items: center; gap: 12px; }
+.hero-n { font-size: 34px; font-weight: 650; font-variant-numeric: tabular-nums; line-height: 1; }
+.hero-k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; line-height: 1.5; }
+.muted-s { color: var(--muted); text-transform: none; letter-spacing: 0; }
+
+.calib-stats { display: flex; gap: 18px; }
+.calib-stats .stat { align-items: flex-start; }
+
+.legend { display: flex; gap: 14px; font-size: 11px; color: var(--muted); }
+.legend .lg { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.sw-pred { background: var(--pred); }
+.sw-obs { background: var(--obs); }
+
+.rel { display: flex; flex-direction: column; gap: 10px; }
+.rel-row { display: grid; grid-template-columns: 52px 1fr; gap: 8px; align-items: center; }
+.rel-row .rng { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.rel-row .rng b { color: var(--text); font-weight: 600; display: block; font-size: 10px; }
+.rel-pair { display: flex; flex-direction: column; gap: 2px; } /* 2px surface gap between marks */
+.rel-bar { display: grid; grid-template-columns: 1fr 34px; gap: 6px; align-items: center; }
+.rel-track { height: 7px; background: var(--panel-2); border-radius: 4px; overflow: hidden; }
+.rel-fill { height: 100%; border-radius: 4px; display: block; }
+.rel-fill.pred { background: var(--pred); }
+.rel-fill.obs { background: var(--obs); }
+.rel-val { font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+.rel-empty { color: var(--muted); font-size: 12px; padding: 6px 0; }
+.calib-note { font-size: 11px; color: var(--muted); line-height: 1.5; }
+.calib-note b { color: var(--text); }
+
+/* thumbs on a completed run */
+.rate { display: inline-flex; gap: 4px; margin-left: 8px; }
+.rate button {
+  border: 1px solid var(--line); background: var(--panel-2); color: var(--muted);
+  border-radius: 6px; cursor: pointer; font-size: 11px; padding: 1px 7px; line-height: 1.6;
+}
+.rate button:hover { color: var(--text); border-color: var(--muted); }
+.rate button.picked-ok { color: var(--ok); border-color: var(--ok); }
+.rate button.picked-bad { color: var(--bad); border-color: var(--bad); }
+.rate.done button { cursor: default; opacity: .75; }

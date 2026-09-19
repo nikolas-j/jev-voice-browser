@@ -3,6 +3,7 @@ import type { TypeSafeClient } from "@typesafe-ai/sdk";
 import { WikiBrowser, type PageLink, type PageSnapshot } from "./browser.js";
 import { bus, type Candidate, type Intent } from "./events.js";
 import { decide, topK, NO_LINK } from "./jev.js";
+import { calibration } from "./calibration.js";
 
 // Thresholds on the top probability of the chosen candidate. Tune on real usage.
 export const THRESHOLDS = {
@@ -70,6 +71,22 @@ export class Pipeline {
         routing,
       });
 
+      // Log what we predicted and how sure we were. Truth arrives later, from the human.
+      if (intent === "click_link" && linkTop[0]) {
+        calibration.record({
+          runId, kind: "link", predictedId: linkTop[0].id,
+          predictedLabel: linkCandidates[0]?.label ?? linkTop[0].id,
+          probability: linkTop[0].probability, routing,
+        });
+      } else if (intent === "search" && queryTop[0]) {
+        calibration.record({
+          runId, kind: "query", predictedId: queryTop[0].id,
+          predictedLabel: queryTop[0].id,
+          probability: queryTop[0].probability, routing,
+        });
+      }
+      bus.publish({ type: "calibration", summary: calibration.summary() });
+
       if (routing === "execute") {
         await this.execute(runId, page, intent, linkTop[0]?.id, queryTop[0]?.id);
         this.finish(runId, startedAt);
@@ -95,6 +112,9 @@ export class Pipeline {
     const p = this.pending.get(runId);
     if (!p) throw new Error(`No pending run ${runId}`);
     this.pending.delete(runId);
+    // Ground truth, free: whatever the human picked is what the model should have picked.
+    calibration.resolveByChoice(runId, candidateId);
+    bus.publish({ type: "calibration", summary: calibration.summary() });
     if (p.intent === "click_link") await this.execute(runId, p.page, "click_link", candidateId, undefined);
     else if (p.intent === "search") await this.execute(runId, p.page, "search", undefined, candidateId);
     else await this.execute(runId, p.page, p.intent, undefined, undefined);
