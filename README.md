@@ -1,106 +1,129 @@
-# Jev drives Wikipedia
+# KODA — a voice assistant that knows when it is sure
 
-Voice-controlled Wikipedia navigation where **TypeSafe's Jev (System One)** makes every decision and code executes them, with a live dashboard showing each model call's tokens, cost, and latency.
+**Team members:** Nikolas Juhava, Qilun Li, Atte Laakso
+
+KODA lives on the page you are already looking at. You say "hey KODA", ask for
+something, and it acts, asks, or admits it cannot. Every decision comes from
+**TypeSafe's Jev (System One)**, a typed probabilistic model: no language model
+is in the loop, nothing is ever generated, and every output is a selection from
+a list the code built, with a measured probability attached.
 
 ```
-🎤 voice ──▶ transcript ──▶ Jev (one fan-out request) ──▶ confidence routing ──▶ Playwright executes ──▶ page changes
-                                                                   │
-                                                                   ▼
-                                                  dashboard: model, tokens, $, ms, probabilities
+🎤 voice ──▶ transcript ──▶ Jev (one fan-out request) ──▶ confidence routing ──▶ Playwright acts
+                                                              │
+                                                              ▼
+                                            overlay: what it picked, and how sure
 ```
 
+## Project overview
+
+Voice browsing has existed for years and is mostly unusable, because a generative
+assistant that is wrong sounds exactly like one that is right. KODA removes the
+generation step. On every command the code enumerates the options — every link on
+the page, every section heading, every paragraph, every span of the words you just
+said — and the model's only job is to pick one and report how likely it is to be
+correct. A search box can therefore only ever contain words you actually said.
+
+Because the probability is measured rather than written, a threshold on it means
+something. KODA acts alone above its threshold, shows a short pick-list just below
+it, and says so plainly when nothing on the page matches.
 
 ## Trust, measured
 
-This branch adds the part that makes a confidence threshold mean something: we
-measure whether the model's probabilities are true, from the session itself.
-
-- **Calibration ledger** (`src/calibration.ts`) logs every decision with the
-  probability Jev gave the option it picked. Ground truth arrives from normal use:
-  the candidate you pick in the confirm tier is the truth, and executed runs can be
-  rated right or wrong in one click. Reliability buckets, ECE, Brier and a
-  risk-coverage curve are computed from those pairs and shown live. Persisted to
-  `data/calibration.json`.
+- **Calibration ledger** (`src/calibration.ts`) records every decision with the
+  probability Jev gave the option it chose. Ground truth arrives free from normal
+  use: the candidate you confirm is the truth, and any executed action can be rated
+  right or wrong by voice. Reliability buckets, ECE, Brier score and a risk-coverage
+  curve are computed live and persisted to `data/calibration.json`.
+- **Self-tuning threshold.** Once there is enough evidence, KODA sets its own
+  act-alone cutoff from its measured reliability curve rather than a hand-picked
+  constant.
 - **Measured baseline** (`src/shadow.ts`, optional) sends the identical decision to
-  a frontier LLM and measures latency, tokens, cost and agreement, so the speed and
-  cost multiples are measurements rather than citations. Set `ANTHROPIC_API_KEY` to
-  enable; without it nothing changes.
+  a frontier LLM and records latency, tokens, cost and agreement, so speed and cost
+  multiples are measurements rather than citations. Enabled by setting
+  `ANTHROPIC_API_KEY`; without it nothing changes.
 
-Endpoints: `GET /calibration`, `POST /feedback` `{runId, correct}`,
-`POST /calibration/reset`.
-
-See `PITCH.md` for the argument, including an honest account of what is and is not
-new here.
+Endpoints: `GET /calibration`, `POST /feedback` `{runId, correct}`, `POST /calibration/reset`.
 
 ## Run it
 
 ```sh
 npm install
-cp .env.example .env      # put your TypeSafe key in TYPESAFE_AI_KEY (or TYPESAFE_API_KEY)
-npm start                 # opens Chrome on Wikipedia + dashboard at http://localhost:3000
+cp .env.example .env      # TypeSafe key in TYPESAFE_AI_KEY
+npm start
 ```
 
-Open <http://localhost:3000> in Chrome or Edge, click the mic (or press Space), and speak:
+A Chrome window opens on Wikipedia with the KODA pill in the corner; the dashboard
+is at <http://localhost:3000>. Click the pill or say "hey KODA", then speak:
 
 - "open the page about the industrial revolution"
 - "go to the history section"
 - "who was James Watt"
 - "search for Ada Lovelace"
-- "scroll down" · "go back"
+- "scroll down" · "go back" · "back to the top" · "reload"
 
-The Playwright-driven Chrome window is the one navigating; the dashboard tab is the control room.
-
-`npm run smoke` runs a scripted sequence headlessly and prints every decision, useful for testing question changes.
+Escape mutes the microphone instantly. `npm run smoke` runs a scripted sequence
+headlessly and prints every decision.
 
 ## How Jev is used
 
-One request per command asks several **independent questions over the same state** (the transcript plus the current page's title, summary, headings, and up to ~440 extracted links/section anchors). They run in parallel; code consumes only the answers the chosen intent needs.
+One request per command asks several **independent questions over the same state**
+— the transcript plus the page's title, summary, headings, paragraphs and up to
+~440 extracted links and anchors. They run in parallel; code consumes only the
+answers the chosen intent needs.
 
 | Question | Type | Decides |
 |---|---|---|
-| `intent` | Choice | `click_link` / `search` / `scroll_down` / `scroll_up` / `go_back` / `unclear` |
-| `target_link_N` | Choice over link ids (+ `NONE`) | Which link or section matches, as a probability per candidate |
-| `search_query` | Choice over transcript spans | The search topic, *selected* from the user's own words rather than generated |
-| `goal_satisfied` | Noul | Whether the current page already is what was asked for |
+| `intent` | Choice | click a link, search, answer, scroll, go back/forward, reload, or unclear |
+| `target_link_N` | Choice over link ids | Which link or section matches, as a probability per candidate |
+| `search_query` | Choice over transcript spans | The search topic, *selected* from the user's own words |
+| `answer_passage` | Choice over paragraph ids | Which passage on the page answers the question |
+| `goal_satisfied` | Noul | Whether the page already is what was asked for |
 
-**Chunking.** The API accepts at most 255 options per Choice. Pages with more candidates get one `target_link_N` question per chunk in the same request; if the intent is `click_link`, a second small request picks among the chunk winners (top 3 per chunk). Both calls appear on the dashboard.
-
-**Confidence routing** (`src/pipeline.ts`, `THRESHOLDS`): the top candidate's probability decides whether to execute immediately, show the top candidates for a click-to-confirm, or escalate ("nothing matched"). Thresholds are a starting point; tune them on real usage.
+The API accepts at most 255 options per Choice, so pages with more candidates get
+one `target_link_N` question per chunk in the same request, followed by a small
+second request among the chunk winners.
 
 ## Measured (jev-1.13.0, Sept 2026)
 
-Typical Wikipedia article (300–500 candidates): 20–31k input tokens, **$0.0008–0.0014 and 0.5–1.5 s per command** for the fan-out request, plus ~$0.00004 / 0.3–0.7 s for the final-round request on link clicks. Output tokens are free. The first request after startup can take 20+ s (cold start), so the server sends a warm-up request on boot.
-
-## Models
-
-| Role | Model | Notes |
-|---|---|---|
-| All decisions | `jev-latest` (TypeSafe) | $0.042 / M input tokens, output free |
-| Speech-to-text | Browser Web Speech API | Free, no key, Chrome/Edge. Swap in a hosted STT (Deepgram, Whisper) if you need better accuracy or other browsers |
-| Comparison baseline | none yet | `src/pricing.ts` and the `model_call` event are model-agnostic — add an LLM (e.g. Claude Haiku 4.5) running the same link-selection task to show cost/latency side by side |
+A typical Wikipedia article carries 300–500 candidates: 20–31k input tokens,
+**$0.0008–0.0014 and 0.5–1.5 s per command** for the fan-out request, plus
+~$0.00004 and 0.3–0.7 s for the final round on link clicks. Output tokens are
+unmetered. The first request after startup can take 20+ s, so the server warms up
+on boot.
 
 ## Layout
 
 ```
-src/server.ts      Express + SSE; POST /command, POST /confirm, GET /events
-src/pipeline.ts    orchestration, confidence routing, event log
-src/jev.ts         question design, chunking, measured request wrapper
-src/browser.ts     Playwright wrapper for the Wikipedia tab
-src/dom/extract.js page-side link/section extraction (plain JS, evaluated in the page)
-src/events.ts      event types + totals
-src/pricing.ts     per-model pricing
-public/            dashboard (vanilla HTML/JS, Web Speech API mic)
-scripts/smoke.ts   headless end-to-end run
+src/server.ts       Express + SSE; POST /command, /confirm, /feedback; GET /events, /calibration
+src/pipeline.ts     orchestration, confidence routing, learned thresholds, event log
+src/jev.ts          question design, chunking, measured request wrapper
+src/calibration.ts  reliability ledger: ECE, Brier, risk-coverage, threshold suggestion
+src/shadow.ts       optional frontier-LLM baseline on the identical decision
+src/browser.ts      Playwright wrapper and overlay bridge
+src/dom/overlay.js  the in-page widget: wake word, confidence gauge, voice clarification
+src/dom/extract.js  page-side link, section and paragraph extraction
+public/             dashboard (vanilla HTML/JS)
+scripts/smoke.ts    headless end-to-end run
 ```
 
-## Config (`.env`)
+## Stack
 
-| Var | Default | |
-|---|---|---|
-| `TYPESAFE_AI_KEY` / `TYPESAFE_API_KEY` | — | required |
-| `TYPESAFE_MODEL` | `jev-latest` | |
-| `BROWSER_CHANNEL` | (bundled Chromium) | `chrome` or `msedge` to drive the installed browser |
-| `HEADLESS` | `false` | |
-| `PORT` | `3000` | |
+TypeScript on Node 20, Express with server-sent events, Playwright driving Chrome,
+the TypeSafe SDK for all decisions, the browser Web Speech API for transcription,
+and a shadow-DOM overlay injected into the page itself.
 
-Docs: <https://docs.typesafe.ai> (API, primitives, cookbooks — the *function calling*, *semantic find*, and *hierarchical classification* cookbooks are the patterns this project composes).
+## Contributions
+
+- **Nikolas Juhava** — original voice-to-Jev prototype: the question design,
+  chunked Choice fan-out, confidence routing and the cost/latency dashboard that
+  the rest is built on.
+- **Qilun Li** — calibration and evaluation: the reliability ledger, ECE and Brier
+  scoring, the risk-coverage curve, and the self-tuning act-alone threshold derived
+  from it.
+- **Atte Laakso** — the in-page product: shadow-DOM overlay, wake-word listening,
+  hands-free voice clarification and rating, extractive answers, and the frontier-LLM
+  baseline harness.
+
+See `PITCH.md` for the argument, including an honest account of what is and is not
+new here. TypeSafe docs: <https://docs.typesafe.ai>
