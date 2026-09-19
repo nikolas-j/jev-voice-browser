@@ -88,5 +88,25 @@
     "resolved": true,
     "correct": true,
     "via": "feedback"
+  },
+  {
+    "runId": "run-mu88ol9h-1",
+    "kind": "query",
+    "predictedId": "Germany",
+    "predictedLabel": "Germany",
+    "probability": 1,
+    "routing": "execute",
+    "ts": 1789813394868,
+    "resolved": false
+  },
+  {
+    "runId": "run-mu88ph1c-5",
+    "kind": "link",
+    "predictedId": "L073",
+    "predictedLabel": "English",
+    "probability": 0.98,
+    "routing": "execute",
+    "ts": 1789813437156,
+    "resolved": false
   }
 ]

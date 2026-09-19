@@ -198,6 +198,19 @@
   $("pill").onclick = () => setOpen(!open);
   $("close").onclick = () => setOpen(false);
 
+  // Hold the conversation open for a while so you do not have to say the name every time.
+  function keepTalking() {
+    armedUntil = Date.now() + CONVERSATION_MS;
+    $("ear").classList.remove("hidden");
+    const mine = armedUntil;
+    setTimeout(() => {
+      if (armedUntil !== mine) return;
+      armedUntil = 0;
+      $("ear").classList.add("hidden");
+      setNote("Say “hey KODA” when you need me", null);
+    }, CONVERSATION_MS);
+  }
+
   function setNote(text, kind) {
     $("noteT").textContent = text;
     $("dot").className = "dot" + (kind ? " " + kind : "");
@@ -243,6 +256,8 @@
   // Called from Node after every decision / action.
   window.__sxUpdate = (s) => {
     currentRun = s.runId || currentRun;
+    // Conversational window: it just did something, so the next thing you say is for it.
+    if (wakeOn && (s.phase === "done" || s.phase === "clarify")) keepTalking();
     if (s.phase === "clarify" && s.intent === "unclear") {
       // Not an ambiguous target — a request KODA cannot carry out at all. Say so, and say what it can do.
       busy(false);
@@ -268,12 +283,13 @@
             <span class="p">${Math.round(c.probability * 100)}%</span></button>`)
         .join("");
       setNote("Waiting for you — I will not guess", "warn");
+      $("ear").classList.toggle("hidden", !wakeOn);
     } else if (s.phase === "done") {
       busy(false);
       $("ask").classList.add("hidden");
       $("done").classList.remove("hidden");
       $("doneTxt").textContent = s.description || "Done";
-      setNote(s.confident ? `Acted on my own at ${Math.round((s.top || 0) * 100)}% confidence` : "Done", s.ok ? null : "bad");
+      setNote((s.confident ? `Acted on my own at ${Math.round((s.top || 0) * 100)}% confidence` : "Done") + (wakeOn ? " · still listening, just say the next thing" : ""), s.ok ? null : "bad");
     } else if (s.phase === "error") {
       busy(false);
       setNote(s.message || "Something went wrong", "bad");
@@ -288,14 +304,31 @@
   // ---- Voice ---------------------------------------------------------------
   // Two ways in: press the mic and speak, or just say "hey KODA …" while it listens
   // ambiently. Ambient speech that does not address KODA is ignored, never acted on.
-  const WAKE = /\b(?:hey|hi|ok|okay)[,\s]+(?:koda|coda|kota|kuda|khoda|cola|quota)\b/i;
+  // Web Speech has never heard of "KODA", so it guesses: corta, Cora, quota, coda, kota…
+  // Matching an exact list loses. Match the phonetic family instead: an address word,
+  // then a short word starting with a k/c/q sound that is not ordinary English.
+  const ADDRESS = /\b(?:hey|hi|hey there|ok|okay|hello)[,\s]+([a-z']{2,9})/i;
+  const KNOWN = /^(?:koda|coda|kota|kora|corta|cora|kuda|khoda|cola|quota|cuda|kodak|quota|korda|chota|goda|soda)$/i;
+  const NOT_A_NAME = new Set([
+    "could", "come", "can", "cool", "call", "care", "keep", "know", "kind", "close",
+    "check", "click", "come", "copy", "cancel", "clear", "quick", "quit", "cut",
+  ]);
+  function wakeMatch(text) {
+    const m = ADDRESS.exec(text);
+    if (!m) return null;
+    const w = m[1].toLowerCase();
+    const plausible = KNOWN.test(w) || (/^[kcqg]/.test(w) && w.length >= 3 && w.length <= 7 && !NOT_A_NAME.has(w));
+    return plausible ? { index: m.index, length: m[0].length, heard: w } : null;
+  }
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 
   let wakeOn = true;      // ambient wake word armed
   let armedUntil = 0;     // after a bare "hey KODA", the NEXT utterance is the command
-  const FOLLOW_MS = 9000;
+  const FOLLOW_MS = 9000;          // bare "hey KODA", waiting for the command
+  const CONVERSATION_MS = 15000;   // after it acts, keep talking without saying the name again
   let manual = false;     // user pressed the mic, so the whole utterance is the command
   let listening = false;
+  let denied = 0;
   let rec = null;
 
   function paintWake() {
@@ -317,21 +350,27 @@
     rec.interimResults = true;
     rec.continuous = true;
 
-    rec.onstart = () => { listening = true; $("mic").classList.toggle("on", manual); paintWake(); };
+    rec.onstart = () => { listening = true; $("mic").classList.toggle("on", manual); paintWake();
+      console.log("[koda] rec start (wakeOn=" + wakeOn + ")"); };
     rec.onend = () => {
       listening = false;
       $("mic").classList.remove("on");
       paintWake();
       // Chrome ends the session on silence; re-arm so the wake word keeps working.
+      console.log("[koda] rec end, rearm=" + wakeOn);
       if (wakeOn) setTimeout(startRec, 400);
     };
     rec.onerror = (e) => {
       listening = false;
       $("mic").classList.remove("on");
       if (e.error === "not-allowed" || e.error === "service-not-allowed") {
-        wakeOn = false;
-        setNote("Microphone blocked — type instead", "warn");
+        denied += 1;
+        console.log("[koda] rec error " + e.error + " (" + denied + ")");
+        if (denied >= 3) { wakeOn = false; setNote("Microphone blocked — type instead", "warn"); }
+        else setTimeout(startRec, 1200);
+        console.log("[koda] rec error " + e.error);
       } else if (e.error !== "no-speech" && e.error !== "aborted") {
+        console.log("[koda] rec error " + e.error);
         setNote("Mic: " + e.error, "warn");
       }
       paintWake();
@@ -345,7 +384,9 @@
       }
       const armed = Date.now() < armedUntil;
       if ((manual || armed) && interim) $("inp").value = interim;
+      if (interim) console.log("[koda] interim: " + interim);
       if (!final) return;
+      console.log("[koda] FINAL: \"" + final + "\" manual=" + manual + " armed=" + armed + " wakeOn=" + wakeOn + " wakeMatch=" + JSON.stringify(wakeMatch(final)));
 
       if (manual) { manual = false; submit(final); return; }
 
@@ -357,9 +398,9 @@
       }
       if (!wakeOn) return;
 
-      const m = WAKE.exec(final);
+      const m = wakeMatch(final);
       if (!m) return;                             // ambient chatter: ignore entirely
-      const cmd = final.slice(m.index + m[0].length).replace(/^[\s,.:;-]+/, "").trim();
+      const cmd = final.slice(m.index + m.length).replace(/^[\s,.:;-]+/, "").trim();
       setOpen(true);
       if (cmd) { armedUntil = 0; submit(cmd); }
       else {
@@ -368,9 +409,9 @@
         $("inp").value = "";
         setNote("Listening — go ahead", null);
         $("pill").classList.add("busy");
+        const mine = armedUntil;
         setTimeout(() => {
-          if (Date.now() >= armedUntil && armedUntil !== 0) return;
-          if (armedUntil === 0) return;
+          if (armedUntil !== mine) return;   // a command already arrived
           armedUntil = 0;
           $("pill").classList.remove("busy");
           setNote("Still there — say it again or type", "warn");
