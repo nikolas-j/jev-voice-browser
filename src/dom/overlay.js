@@ -129,7 +129,8 @@
     <div class="hd">
       <span class="mark">${micSvg()}</span>
       <h1 id="title">KODA</h1>
-      <button class="wake" id="wake" title="Wake word: say “hey KODA”">hey KODA</button>
+      <button class="wake" id="wake" title="Wake word: say “hey KODA” before each command">hey KODA</button>
+      <button class="wake" id="convo" title="Keep listening after each action, so follow-ups need no wake word">follow-ups</button>
       <button class="x" id="close" title="Collapse">&times;</button>
     </div>
     <div class="bd">
@@ -353,7 +354,7 @@
     currentRun = s.runId || currentRun;
     paintGauge(s);
     // Conversational window: it just did something, so the next thing you say is for it.
-    if (wakeOn && (s.phase === "done" || s.phase === "clarify")) keepTalking();
+    if (wakeOn && convo && (s.phase === "done" || s.phase === "clarify")) keepTalking();
     if (s.phase === "clarify" && s.intent === "unclear") {
       // Not an ambiguous target — a request KODA cannot carry out at all. Say so, and say what it can do.
       busy(false);
@@ -394,7 +395,7 @@
       } else {
         $("doneTxt").textContent = s.description || "Done";
       }
-      setNote((s.confident ? `Acted on my own at ${Math.round((s.top || 0) * 100)}% confidence` : "Done") + (wakeOn ? " · say “right” or “wrong”, or just carry on" : ""), s.ok ? null : "bad");
+      setNote((s.confident ? `Acted on my own at ${Math.round((s.top || 0) * 100)}% confidence` : "Done") + (wakeOn && convo ? " · say “right” or “wrong”, or just carry on" : ""), s.ok ? null : "bad");
     } else if (s.phase === "error") {
       busy(false);
       setNote(s.message || "Something went wrong", "bad");
@@ -428,6 +429,9 @@
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 
   let wakeOn = true;      // ambient wake word armed
+  // Off by default: with it on, ANY sentence in the next 15s is treated as a command,
+  // which is great in use and ruinous while you are talking about the demo.
+  let convo = false;
   let armedUntil = 0;     // after a bare "hey KODA", the NEXT utterance is the command
   const FOLLOW_MS = 9000;          // bare "hey KODA", waiting for the command
   const CONVERSATION_MS = 15000;   // after it acts, keep talking without saying the name again
@@ -438,6 +442,7 @@
 
   function paintWake() {
     $("wake").classList.toggle("on", wakeOn && Boolean(rec));
+    $("convo").classList.toggle("on", convo && wakeOn && Boolean(rec));
     $("ear").classList.toggle("hidden", !(wakeOn && listening));
   }
 
@@ -543,8 +548,25 @@
       else startRec();
     };
 
+    $("convo").onclick = () => {
+      convo = !convo;
+      if (!convo) armedUntil = 0;
+      setNote(convo ? "Follow-ups on — I'll keep listening after each action" : "Follow-ups off — say “hey KODA” each time", null);
+      paintWake();
+    };
+
+    // Panic mute: Escape silences KODA instantly, which is what you want mid-sentence.
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") return;
+      wakeOn = false; convo = false; armedUntil = 0; awaitingRating = null;
+      if (listening) { try { rec.stop(); } catch (_) {} }
+      setNote("Muted — press the mic to talk, or re-enable “hey KODA”", "warn");
+      paintWake();
+    });
+
     $("wake").onclick = () => {
       wakeOn = !wakeOn;
+      if (!wakeOn) { armedUntil = 0; convo = false; }
       if (wakeOn) startRec();
       else if (listening) { try { rec.stop(); } catch (_) {} }
       setNote(wakeOn ? "Listening for “hey KODA”" : "Wake word off — press the mic or type", null);

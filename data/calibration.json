@@ -202,5 +202,77 @@
     "routing": "execute",
     "ts": 1789814256748,
     "resolved": false
+  },
+  {
+    "runId": "run-mu8977vq-12",
+    "kind": "link",
+    "predictedId": "NONE",
+    "predictedLabel": "No matching link",
+    "probability": 0.5700000000000001,
+    "routing": "escalate",
+    "ts": 1789814263980,
+    "resolved": false
+  },
+  {
+    "runId": "run-mu897zv2-2",
+    "kind": "query",
+    "predictedId": "Battle of boy tears",
+    "predictedLabel": "Battle of boy tears",
+    "probability": 0.96,
+    "routing": "execute",
+    "ts": 1789814300199,
+    "resolved": false
+  },
+  {
+    "runId": "run-mu898neq-7",
+    "kind": "link",
+    "predictedId": "L035",
+    "predictedLabel": "A new species of tiger cat",
+    "probability": 0.67,
+    "routing": "execute",
+    "ts": 1789814330715,
+    "resolved": false
+  },
+  {
+    "runId": "run-mu89amdk-1",
+    "kind": "query",
+    "predictedId": "steam engines",
+    "predictedLabel": "steam engines",
+    "probability": 1,
+    "routing": "execute",
+    "ts": 1789814422762,
+    "resolved": false
+  },
+  {
+    "runId": "run-mu89awza-3",
+    "kind": "link",
+    "predictedId": "NONE",
+    "predictedLabel": "No matching link",
+    "probability": 0.66,
+    "routing": "escalate",
+    "ts": 1789814437382,
+    "resolved": true,
+    "correct": false,
+    "via": "confirm"
+  },
+  {
+    "runId": "run-mu89i0e8-1",
+    "kind": "query",
+    "predictedId": "steam engines",
+    "predictedLabel": "steam engines",
+    "probability": 1,
+    "routing": "execute",
+    "ts": 1789814767439,
+    "resolved": false
+  },
+  {
+    "runId": "run-mu89i9l1-2",
+    "kind": "query",
+    "predictedId": "taco song and",
+    "predictedLabel": "taco song and",
+    "probability": 0.35000000000000003,
+    "routing": "execute",
+    "ts": 1789814779713,
+    "resolved": false
   }
 ]
