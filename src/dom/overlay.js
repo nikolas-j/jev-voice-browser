@@ -292,6 +292,8 @@
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 
   let wakeOn = true;      // ambient wake word armed
+  let armedUntil = 0;     // after a bare "hey KODA", the NEXT utterance is the command
+  const FOLLOW_MS = 9000;
   let manual = false;     // user pressed the mic, so the whole utterance is the command
   let listening = false;
   let rec = null;
@@ -341,18 +343,39 @@
         const r = e.results[i];
         if (r.isFinal) final += r[0].transcript; else interim += r[0].transcript;
       }
-      if (manual && interim) $("inp").value = interim;
+      const armed = Date.now() < armedUntil;
+      if ((manual || armed) && interim) $("inp").value = interim;
       if (!final) return;
 
       if (manual) { manual = false; submit(final); return; }
+
+      // Follow-up window: they already said the wake word, so this whole utterance is the command.
+      if (armed) {
+        armedUntil = 0;
+        const t = final.trim();
+        if (t) { submit(t); return; }
+      }
       if (!wakeOn) return;
 
       const m = WAKE.exec(final);
       if (!m) return;                             // ambient chatter: ignore entirely
       const cmd = final.slice(m.index + m[0].length).replace(/^[\s,.:;-]+/, "").trim();
       setOpen(true);
-      if (cmd) submit(cmd);
-      else { setNote("Yes? Go ahead", null); $("inp").focus(); }
+      if (cmd) { armedUntil = 0; submit(cmd); }
+      else {
+        // Bare wake word: stay open and keep listening for the next thing they say.
+        armedUntil = Date.now() + FOLLOW_MS;
+        $("inp").value = "";
+        setNote("Listening — go ahead", null);
+        $("pill").classList.add("busy");
+        setTimeout(() => {
+          if (Date.now() >= armedUntil && armedUntil !== 0) return;
+          if (armedUntil === 0) return;
+          armedUntil = 0;
+          $("pill").classList.remove("busy");
+          setNote("Still there — say it again or type", "warn");
+        }, FOLLOW_MS);
+      }
     };
 
     $("mic").onclick = () => {
