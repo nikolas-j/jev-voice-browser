@@ -17,6 +17,48 @@ const client = createClient();
 const browser = new WikiBrowser();
 const pipeline = new Pipeline(client, browser);
 
+// ---- In-page overlay bridge -------------------------------------------------
+// The overlay drives the pipeline, and the pipeline pushes its state back into the page,
+// so the whole assistant lives on the site itself. The dashboard stays as the instrument panel.
+browser.onCommand = (text) => { void pipeline.handle(text, "voice"); };
+browser.onConfirm = (runId, candidateId) => { void pipeline.confirm(runId, candidateId).catch(() => {}); };
+browser.onFeedback = (runId, correct) => {
+  calibration.resolveByFeedback(runId, correct);
+  bus.publish({ type: "calibration", summary: calibration.summary() });
+};
+
+// Remember the last decision per run so the "done" card can say how sure it was.
+const lastDecision = new Map<string, { top: number; confident: boolean }>();
+
+bus.on("event", (ev) => {
+  if (ev.type === "decision") {
+    const cands = (ev.target ?? ev.searchQuery)?.candidates ?? [];
+    const top = cands[0]?.probability ?? ev.intentConfidence;
+    lastDecision.set(ev.runId, { top, confident: ev.routing === "execute" });
+    if (ev.routing !== "execute") {
+      void browser.pushOverlay({
+        phase: "clarify",
+        runId: ev.runId,
+        top,
+        escalated: ev.routing === "escalate",
+        candidates: cands.map((c) => ({ id: c.id, label: c.label, probability: c.probability })),
+      });
+    }
+  } else if (ev.type === "action" && ev.durationMs > 0) {
+    const d = lastDecision.get(ev.runId);
+    void browser.pushOverlay({
+      phase: "done",
+      runId: ev.runId,
+      ok: ev.ok,
+      description: ev.description,
+      top: d?.top,
+      confident: Boolean(d?.confident),
+    });
+  } else if (ev.type === "error") {
+    void browser.pushOverlay({ phase: "error", runId: ev.runId, message: ev.message });
+  }
+});
+
 const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "..", "public")));

@@ -1,0 +1,14 @@
+[
+  {
+    "runId": "run-mu87kgnk-1",
+    "kind": "query",
+    "predictedId": "Germany",
+    "predictedLabel": "Germany",
+    "probability": 1,
+    "routing": "execute",
+    "ts": 1789811522601,
+    "resolved": true,
+    "correct": true,
+    "via": "feedback"
+  }
+]

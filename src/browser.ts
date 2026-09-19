@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 
 // Page-side extraction script; see src/dom/extract.js for why it is plain JS.
 const EXTRACT_SCRIPT = readFileSync(fileURLToPath(new URL("./dom/extract.js", import.meta.url)), "utf8");
+// In-page assistant overlay, injected into every page and surviving navigation.
+const OVERLAY_SCRIPT = readFileSync(fileURLToPath(new URL("./dom/overlay.js", import.meta.url)), "utf8");
 
 interface RawExtract {
   title: string;
@@ -33,10 +35,27 @@ export interface PageSnapshot {
 const WIKI = "https://en.wikipedia.org";
 const EXCLUDED_NAMESPACES = /^\/wiki\/(File|Special|Help|Category|Template|Wikipedia|Talk|Portal|User|Template_talk|Wikipedia_talk|Module|Draft|Book|MediaWiki):/i;
 
+export interface OverlayState {
+  phase: "clarify" | "done" | "error";
+  runId?: string;
+  top?: number;
+  escalated?: boolean;
+  confident?: boolean;
+  ok?: boolean;
+  description?: string;
+  message?: string;
+  candidates?: { id: string; label: string; probability: number }[];
+}
+
 export class WikiBrowser {
   private browser: Browser | null = null;
   private page: Page | null = null;
   readonly maxLinks: number;
+
+  /** Wired up by the server so the in-page overlay can drive the pipeline. */
+  onCommand: (text: string) => void = () => {};
+  onConfirm: (runId: string, candidateId: string) => void = () => {};
+  onFeedback: (runId: string, correct: boolean) => void = () => {};
 
   constructor(opts: { maxLinks?: number } = {}) {
     // Keeps state well under the documented 32k-token budget even on link-heavy articles.
@@ -48,6 +67,20 @@ export class WikiBrowser {
     const channel = process.env.BROWSER_CHANNEL || undefined;
     this.browser = await chromium.launch({ headless, channel });
     const ctx = await this.browser.newContext({ viewport: { width: 1280, height: 900 } });
+    // Voice happens in the page itself, so the page needs the mic.
+    await ctx.grantPermissions(["microphone"]).catch(() => {});
+    // One bridge from the overlay back into Node.
+    await ctx.exposeFunction("__sxBridge", (raw: string) => {
+      try {
+        const m = JSON.parse(raw) as { t: string; text?: string; runId?: string; candidateId?: string; correct?: boolean };
+        if (m.t === "command" && m.text) this.onCommand(m.text);
+        else if (m.t === "confirm" && m.runId && m.candidateId) this.onConfirm(m.runId, m.candidateId);
+        else if (m.t === "feedback" && m.runId && typeof m.correct === "boolean") this.onFeedback(m.runId, m.correct);
+      } catch {
+        /* ignore malformed bridge messages */
+      }
+    });
+    await ctx.addInitScript({ content: OVERLAY_SCRIPT });
     this.page = await ctx.newPage();
     await this.page.goto(startUrl, { waitUntil: "domcontentloaded" });
   }
@@ -81,6 +114,15 @@ export class WikiBrowser {
       links,
       extractMs: Math.round(performance.now() - t0),
     };
+  }
+
+  /** Push assistant state into the page overlay. Never let UI failures break the run. */
+  async pushOverlay(state: OverlayState) {
+    try {
+      await this.p.evaluate((s) => (window as unknown as { __sxUpdate?: (x: unknown) => void }).__sxUpdate?.(s), state);
+    } catch {
+      /* page navigating, or overlay not mounted yet */
+    }
   }
 
   async clickLink(link: PageLink) {
