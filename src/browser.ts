@@ -47,6 +47,10 @@ export interface OverlayState {
   ok?: boolean;
   description?: string;
   answer?: boolean;
+  bar?: number;
+  barSource?: "measured" | "default";
+  resolved?: number;
+  accuracy?: number;
   message?: string;
   candidates?: { id: string; label: string; probability: number }[];
 }

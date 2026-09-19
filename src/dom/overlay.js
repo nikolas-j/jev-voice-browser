@@ -110,6 +110,17 @@
                      background: #fff; margin-right: 6px; vertical-align: middle; animation: pulse 1.6s ease-in-out infinite; }
   .pill .ear { width: 6px; height: 6px; border-radius: 50%; background: #2D6A4F; margin-left: 2px;
                animation: pulse 1.6s ease-in-out infinite; }
+  .gauge { border: 1px solid #E8E4DE; border-radius: 10px; padding: 10px 12px; background: #FCFBF9; }
+  .glabel { display: flex; justify-content: space-between; font-size: 11.5px; color: #6B6560; margin-bottom: 7px; }
+  .glabel span:last-child { font-variant-numeric: tabular-nums; font-weight: 600; color: #1A1A18; }
+  .gtrack { position: relative; height: 8px; background: #EFEBE5; border-radius: 4px; }
+  .gfill { position: absolute; left: 0; top: 0; bottom: 0; background: #2D6A4F; border-radius: 4px; transition: width .35s ease; }
+  .gfill.under { background: #C9A227; }
+  .gbar { position: absolute; top: -3px; bottom: -3px; width: 2px; background: #1A1A18; border-radius: 1px; }
+  .gbar::after { content: "act alone"; position: absolute; top: -15px; left: 50%; transform: translateX(-50%);
+                 font-size: 9px; color: #6B6560; white-space: nowrap; }
+  .gfoot { margin-top: 9px; font-size: 11px; color: #6B6560; line-height: 1.45; }
+  .gfoot b { color: #1A1A18; font-variant-numeric: tabular-nums; }
   .hidden { display: none !important; }
 </style>
 
@@ -143,6 +154,12 @@
         <input class="inp" id="inp" placeholder="Say “hey KODA…” or type a command" autocomplete="off" />
         <button class="mic" id="mic" title="Speak">${micSvg()}</button>
         <button class="btn" id="go">Go</button>
+      </div>
+
+      <div class="gauge hidden" id="gauge">
+        <div class="glabel"><span id="gTxt">confidence</span><span id="gPct">—</span></div>
+        <div class="gtrack"><span class="gfill" id="gFill"></span><span class="gbar" id="gBar"></span></div>
+        <div class="gfoot" id="gFoot"></div>
       </div>
 
       <div class="note" id="note"><span class="dot" id="dot"></span><span id="noteT">Ready</span></div>
@@ -238,11 +255,72 @@
   $("inp").addEventListener("keydown", (e) => { if (e.key === "Enter") submit($("inp").value); });
 
   let currentRun = null;
+  let pendingCands = [];   // what the clarify card is offering, for voice selection
+
+  // Hands-free means the clarification is answered by voice too, not by a click.
+  const ORDINAL = [
+    [/\b(first|one|1st|number one|top one|top)\b/i, 0],
+    [/\b(second|two|2nd|number two)\b/i, 1],
+    [/\b(third|three|3rd|number three)\b/i, 2],
+    [/\b(fourth|four|4th)\b/i, 3],
+    [/\b(fifth|five|5th)\b/i, 4],
+  ];
+  const DISMISS = /\b(neither|none|nothing|no thanks|cancel|never ?mind|forget it|stop)\b/i;
+  // Rating the last action by voice, so building the calibration curve is hands-free too.
+  const RATE_OK = /\b(that'?s? )?(right|correct|good|perfect|yes|yep|nice|spot on|exactly)\b/i;
+  const RATE_BAD = /\b(wrong|no+pe?|not (that|it|right)|bad|incorrect|that'?s wrong)\b/i;
+  let awaitingRating = null;   // runId whose result is on screen and unrated
+
+  function rateByVoice(text) {
+    if (!awaitingRating) return false;
+    const ok = RATE_OK.test(text);
+    const bad = RATE_BAD.test(text);
+    if (!ok && !bad) return false;
+    send({ t: "feedback", runId: awaitingRating, correct: ok && !bad });
+    awaitingRating = null;
+    $("done").classList.add("hidden");
+    setNote(ok && !bad ? "Logged as right — that sets my bar" : "Logged as wrong — that lowers my bar", null);
+    return true;
+  }
+
+  function resolveByVoice(text) {
+    if (!pendingCands.length) return false;
+    if (DISMISS.test(text)) {
+      $("ask").classList.add("hidden");
+      pendingCands = [];
+      setNote("Dropped it", null);
+      return true;
+    }
+    for (const [re, i] of ORDINAL) {
+      if (re.test(text) && pendingCands[i]) { pickCandidate(pendingCands[i].id); return true; }
+    }
+    if (/\b(last|bottom)\b/i.test(text)) { pickCandidate(pendingCands[pendingCands.length - 1].id); return true; }
+    // otherwise match the words they said against the candidate labels
+    const words = text.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 2);
+    if (!words.length) return false;
+    let best = null, bestScore = 0;
+    for (const c of pendingCands) {
+      const label = String(c.label).toLowerCase();
+      const score = words.reduce((n, w) => n + (label.includes(w) ? w.length : 0), 0);
+      if (score > bestScore) { bestScore = score; best = c; }
+    }
+    if (best && bestScore >= 4) { pickCandidate(best.id); return true; }
+    return false;
+  }
+
+  function pickCandidate(id) {
+    $("ask").classList.add("hidden");
+    pendingCands = [];
+    busy(true);
+    setNote("Thanks — doing that now", null);
+    send({ t: "confirm", runId: currentRun, candidateId: id });
+  }
   $("cand").addEventListener("click", (e) => {
     const retry = e.target.closest("button[data-try]");
     if (retry) { $("ask").classList.add("hidden"); submit(retry.dataset.try); return; }
     const b = e.target.closest("button[data-id]");
     if (!b || !currentRun) return;
+    pendingCands = [];
     $("ask").classList.add("hidden");
     busy(true);
     setNote("Thanks — doing that now", null);
@@ -257,8 +335,23 @@
   });
 
   // Called from Node after every decision / action.
+  function paintGauge(s) {
+    if (typeof s.top !== "number" || typeof s.bar !== "number") return;
+    const pctOf = (x) => Math.max(2, Math.min(100, Math.round(x * 100)));
+    $("gauge").classList.remove("hidden");
+    $("gPct").textContent = Math.round(s.top * 100) + "%";
+    $("gTxt").textContent = s.confident ? "confident enough to act" : "not confident enough";
+    $("gFill").style.width = pctOf(s.top) + "%";
+    $("gFill").classList.toggle("under", !s.confident);
+    $("gBar").style.left = pctOf(s.bar) + "%";
+    $("gFoot").innerHTML = s.barSource === "measured"
+      ? `Bar is <b>${Math.round(s.bar * 100)}%</b>, learned from <b>${s.resolved}</b> checked decisions — the lowest confidence where it was still right 90% of the time.`
+      : `Bar is <b>${Math.round(s.bar * 100)}%</b>, a default. After <b>${Math.max(0, 8 - (s.resolved || 0))}</b> more checks it sets its own from measurement.`;
+  }
+
   window.__sxUpdate = (s) => {
     currentRun = s.runId || currentRun;
+    paintGauge(s);
     // Conversational window: it just did something, so the next thing you say is for it.
     if (wakeOn && (s.phase === "done" || s.phase === "clarify")) keepTalking();
     if (s.phase === "clarify" && s.intent === "unclear") {
@@ -282,24 +375,26 @@
       $("askS").textContent = s.escalated
         ? "Nothing cleared the bar. Pick one, or rephrase."
         : `My best guess is only ${Math.round((s.top || 0) * 100)}% — below the bar I am allowed to act on.`;
+      pendingCands = (s.candidates || []).filter((c) => c.id !== "NONE").slice(0, 5);
       $("cand").innerHTML = (s.candidates || [])
         .map((c) => `<button data-id="${c.id}"><span class="nm">${escapeHtml(c.label)}</span>
             <span class="meter"><i style="width:${Math.max(3, Math.round(c.probability * 100))}%"></i></span>
             <span class="p">${Math.round(c.probability * 100)}%</span></button>`)
         .join("");
-      setNote("Waiting for you — I will not guess", "warn");
+      setNote(wakeOn ? "Say “the first one”, or name it — or click" : "Pick one, or rephrase", "warn");
       $("ear").classList.toggle("hidden", !wakeOn);
     } else if (s.phase === "done") {
       busy(false);
       $("ask").classList.add("hidden");
       $("done").classList.remove("hidden");
+      awaitingRating = s.runId || currentRun;
       if (s.answer) {
         $("doneTxt").innerHTML = `<div class="passage">${escapeHtml(s.description || "")}<span class="src">from this page${
           s.top ? ` · ${Math.round(s.top * 100)}% confident this passage answers it` : ""}</span></div>`;
       } else {
         $("doneTxt").textContent = s.description || "Done";
       }
-      setNote((s.confident ? `Acted on my own at ${Math.round((s.top || 0) * 100)}% confidence` : "Done") + (wakeOn ? " · still listening, just say the next thing" : ""), s.ok ? null : "bad");
+      setNote((s.confident ? `Acted on my own at ${Math.round((s.top || 0) * 100)}% confidence` : "Done") + (wakeOn ? " · say “right” or “wrong”, or just carry on" : ""), s.ok ? null : "bad");
     } else if (s.phase === "error") {
       busy(false);
       setNote(s.message || "Something went wrong", "bad");
@@ -399,6 +494,18 @@
       console.log("[koda] FINAL: \"" + final + "\" manual=" + manual + " armed=" + armed + " wakeOn=" + wakeOn + " wakeMatch=" + JSON.stringify(wakeMatch(final)));
 
       if (manual) { manual = false; submit(final); return; }
+
+      // A short "yes / no / wrong" right after an action is a rating, not a new command.
+      if (awaitingRating && (armed || wakeMatch(final))) {
+        const t0 = (() => { const w = wakeMatch(final); return w ? final.slice(w.index + w.length) : final; })();
+        if (t0.trim().split(/\s+/).length <= 4 && rateByVoice(t0)) { keepTalking(); return; }
+      }
+
+      // If KODA is waiting on a clarification, the next thing said resolves it.
+      if (pendingCands.length && (armed || wakeMatch(final))) {
+        const stripped = (() => { const w = wakeMatch(final); return w ? final.slice(w.index + w.length) : final; })();
+        if (resolveByVoice(stripped)) { armedUntil = 0; return; }
+      }
 
       // Follow-up window: they already said the wake word, so this whole utterance is the command.
       if (armed) {

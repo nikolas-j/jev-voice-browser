@@ -8,6 +8,7 @@ import { createClient } from "./jev.js";
 import { Pipeline } from "./pipeline.js";
 import { bus, type Candidate } from "./events.js";
 import { calibration } from "./calibration.js";
+import { THRESHOLDS } from "./pipeline.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT ?? 3000);
@@ -28,13 +29,14 @@ browser.onFeedback = (runId, correct) => {
 };
 
 // Remember the last decision per run so the "done" card can say how sure it was.
-const lastDecision = new Map<string, { top: number; confident: boolean; answer: boolean }>();
+const lastDecision = new Map<string, { top: number; confident: boolean; answer: boolean; bar?: number; barSource?: "measured" | "default" }>();
 
 bus.on("event", (ev) => {
   if (ev.type === "decision") {
     const cands: Candidate[] = (ev.target ?? ev.searchQuery)?.candidates ?? [];
     const top = cands[0]?.probability ?? ev.intentConfidence;
-    lastDecision.set(ev.runId, { top, confident: ev.routing === "execute", answer: ev.intent === "answer" });
+    lastDecision.set(ev.runId, { top, confident: ev.routing === "execute", answer: ev.intent === "answer", bar: ev.bar?.value, barSource: ev.bar?.source });
+    const cal = calibration.summary();
     if (ev.routing !== "execute") {
       void browser.pushOverlay({
         phase: "clarify",
@@ -42,6 +44,10 @@ bus.on("event", (ev) => {
         intent: ev.intent,
         top,
         escalated: ev.routing === "escalate",
+        bar: ev.bar?.value ?? THRESHOLDS.link.execute,
+        barSource: ev.bar?.source ?? "default",
+        resolved: cal.resolved,
+        accuracy: cal.accuracy,
         candidates: cands.map((c) => ({ id: c.id, label: c.label, probability: c.probability })),
       });
     }
@@ -55,6 +61,10 @@ bus.on("event", (ev) => {
       top: d?.top,
       confident: Boolean(d?.confident),
       answer: Boolean(d?.answer),
+      bar: d?.bar,
+      barSource: d?.barSource,
+      resolved: calibration.summary().resolved,
+      accuracy: calibration.summary().accuracy,
     });
   } else if (ev.type === "error") {
     void browser.pushOverlay({ phase: "error", runId: ev.runId, message: ev.message });
