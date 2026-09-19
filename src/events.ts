@@ -10,6 +10,10 @@ export type Intent =
   | "scroll_down"
   | "scroll_up"
   | "go_back"
+  | "go_forward"
+  | "scroll_top"
+  | "scroll_bottom"
+  | "reload"
   | "unclear";
 
 export interface ModelCall {

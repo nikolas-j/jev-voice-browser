@@ -87,11 +87,11 @@ export class WikiBrowser {
     this.page = await ctx.newPage();
     // addInitScript covers document-start; this covers anything that slipped through.
     this.page.on("load", () => { void this.ensureOverlay(); });
-    this.page.on("console", (m) => {
-      const t = m.text();
-      if (t.startsWith("[sextant]")) console.log("  page:", t);
-    });
-    this.page.on("pageerror", (e) => console.warn("  page error:", e.message));
+    // Page noise only when debugging: KODA_DEBUG=1
+    if (process.env.KODA_DEBUG) {
+      this.page.on("console", (m) => { const t = m.text(); if (t.startsWith("[koda]")) console.log("  page:", t); });
+      this.page.on("pageerror", (e) => console.warn("  page error:", e.message));
+    }
     await this.page.goto(startUrl, { waitUntil: "domcontentloaded" });
     await this.ensureOverlay();
   }
@@ -134,28 +134,8 @@ export class WikiBrowser {
       if (!present) {
         await this.p.evaluate(OVERLAY_SCRIPT);
         const ok = await this.p.evaluate(() => Boolean(document.getElementById("sx-host")));
-        console.log(ok ? "  overlay injected" : "  overlay injection produced no host element");
+        if (!ok) console.warn("  overlay did not mount");
       }
-      console.log("  overlay diag:", JSON.stringify(await this.p.evaluate(() => {
-        const h = document.getElementById("sx-host");
-        if (!h) return { host: "MISSING" };
-        const hs = getComputedStyle(h);
-        const hr = h.getBoundingClientRect();
-        const sr = (h as HTMLElement & { shadowRoot: ShadowRoot | null }).shadowRoot;
-        const pill = sr ? (sr.getElementById("pill") as HTMLElement | null) : null;
-        const ps = pill ? getComputedStyle(pill) : null;
-        const pr = pill ? pill.getBoundingClientRect() : null;
-        return {
-          parent: h.parentElement ? h.parentElement.tagName : null,
-          shadow: Boolean(sr),
-          shadowChildren: sr ? sr.childElementCount : -1,
-          hostStyle: { pos: hs.position, display: hs.display, vis: hs.visibility, op: hs.opacity, z: hs.zIndex },
-          hostRect: { x: Math.round(hr.x), y: Math.round(hr.y), w: Math.round(hr.width), h: Math.round(hr.height) },
-          pill: pill ? { display: ps!.display, vis: ps!.visibility, op: ps!.opacity,
-                         rect: { x: Math.round(pr!.x), y: Math.round(pr!.y), w: Math.round(pr!.width), h: Math.round(pr!.height) } } : "MISSING",
-          viewport: { w: innerWidth, h: innerHeight },
-        };
-      })));
     } catch (err) {
       console.warn("  overlay injection failed:", err instanceof Error ? err.message : err);
     }
@@ -193,6 +173,18 @@ export class WikiBrowser {
 
   async back() {
     await this.p.goBack({ waitUntil: "domcontentloaded" });
+  }
+
+  async forward() {
+    await this.p.goForward({ waitUntil: "domcontentloaded" });
+  }
+
+  async scrollEdge(where: "top" | "bottom") {
+    await this.p.evaluate((w) => window.scrollTo({ top: w === "top" ? 0 : document.body.scrollHeight, behavior: "smooth" }), where);
+  }
+
+  async reload() {
+    await this.p.reload({ waitUntil: "domcontentloaded" });
   }
 
   async goto(url: string) {

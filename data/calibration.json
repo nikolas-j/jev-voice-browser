@@ -66,5 +66,27 @@
     "resolved": true,
     "correct": true,
     "via": "feedback"
+  },
+  {
+    "runId": "run-mu885s4q-6",
+    "kind": "query",
+    "predictedId": "hero of alexandira",
+    "predictedLabel": "hero of alexandira",
+    "probability": 1,
+    "routing": "execute",
+    "ts": 1789812517616,
+    "resolved": false
+  },
+  {
+    "runId": "run-mu8862uy-7",
+    "kind": "link",
+    "predictedId": "L001",
+    "predictedLabel": "Hero of Alexandria",
+    "probability": 0.99,
+    "routing": "execute",
+    "ts": 1789812530911,
+    "resolved": true,
+    "correct": true,
+    "via": "feedback"
   }
 ]

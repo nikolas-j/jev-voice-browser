@@ -100,6 +100,13 @@
   .rate button { border: 1px solid #E8E4DE; background: #fff; border-radius: 8px; padding: 4px 9px;
                  font-size: 12px; cursor: pointer; color: #6B6560; }
   .rate button:hover { border-color: ${ACCENT}; color: ${ACCENT}; }
+  .wake { border: 1px solid #DCE9E2; background: #fff; color: #6B6560; border-radius: 9999px;
+          padding: 3px 10px; font: inherit; font-size: 11.5px; cursor: pointer; white-space: nowrap; }
+  .wake.on { background: #2D6A4F; border-color: #2D6A4F; color: #fff; }
+  .wake.on::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+                     background: #fff; margin-right: 6px; vertical-align: middle; animation: pulse 1.6s ease-in-out infinite; }
+  .pill .ear { width: 6px; height: 6px; border-radius: 50%; background: #2D6A4F; margin-left: 2px;
+               animation: pulse 1.6s ease-in-out infinite; }
   .hidden { display: none !important; }
 </style>
 
@@ -108,6 +115,7 @@
     <div class="hd">
       <span class="mark">${micSvg()}</span>
       <h1 id="title">KODA</h1>
+      <button class="wake" id="wake" title="Wake word: say “hey KODA”">hey KODA</button>
       <button class="x" id="close" title="Collapse">&times;</button>
     </div>
     <div class="bd">
@@ -129,7 +137,7 @@
       </div>
 
       <div class="row">
-        <input class="inp" id="inp" placeholder="Ask for something on this page…" autocomplete="off" />
+        <input class="inp" id="inp" placeholder="Say “hey KODA…” or type a command" autocomplete="off" />
         <button class="mic" id="mic" title="Speak">${micSvg()}</button>
         <button class="btn" id="go">Go</button>
       </div>
@@ -142,6 +150,7 @@
     <span class="mark">${micSvg()}</span>
     <span class="lbl">KODA</span>
     <span class="sub" id="pillSub">ask this page</span>
+    <span class="ear hidden" id="ear"></span>
   </button>
 </div>`;
 
@@ -160,13 +169,17 @@
     "open the page about steam engines",
     "search for Ada Lovelace",
     "scroll down",
+    "jump to the bottom",
+    "back to the top",
     "go back",
+    "go forward",
+    "reload the page",
   ];
 
   const SUGGESTIONS = [
     "go to the history section",
-    "open the page about steam engines",
     "search for Ada Lovelace",
+    "jump to the bottom",
     "scroll down",
     "go back",
   ];
@@ -272,23 +285,93 @@
     return String(x).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   }
 
-  // Voice, in-page. Enhancement only: typing always works.
+  // ---- Voice ---------------------------------------------------------------
+  // Two ways in: press the mic and speak, or just say "hey KODA …" while it listens
+  // ambiently. Ambient speech that does not address KODA is ignored, never acted on.
+  const WAKE = /\b(?:hey|hi|ok|okay)[,\s]+(?:koda|coda|kota|kuda|khoda|cola|quota)\b/i;
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) { $("mic").style.display = "none"; }
-  else {
-    const rec = new SR();
-    rec.lang = "en-US"; rec.interimResults = true; rec.continuous = false;
-    let on = false;
-    rec.onstart = () => { on = true; $("mic").classList.add("on"); setNote("Listening…", null); };
-    rec.onend = () => { on = false; $("mic").classList.remove("on"); };
-    rec.onerror = (e) => { on = false; $("mic").classList.remove("on"); setNote("Mic: " + e.error + " — type instead", "warn"); };
+
+  let wakeOn = true;      // ambient wake word armed
+  let manual = false;     // user pressed the mic, so the whole utterance is the command
+  let listening = false;
+  let rec = null;
+
+  function paintWake() {
+    $("wake").classList.toggle("on", wakeOn && Boolean(rec));
+    $("ear").classList.toggle("hidden", !(wakeOn && listening));
+  }
+
+  function startRec() {
+    if (!rec || listening) return;
+    try { rec.start(); } catch (_) { /* already starting */ }
+  }
+
+  if (!SR) {
+    $("mic").style.display = "none";
+    $("wake").style.display = "none";
+  } else {
+    rec = new SR();
+    rec.lang = "en-US";
+    rec.interimResults = true;
+    rec.continuous = true;
+
+    rec.onstart = () => { listening = true; $("mic").classList.toggle("on", manual); paintWake(); };
+    rec.onend = () => {
+      listening = false;
+      $("mic").classList.remove("on");
+      paintWake();
+      // Chrome ends the session on silence; re-arm so the wake word keeps working.
+      if (wakeOn) setTimeout(startRec, 400);
+    };
+    rec.onerror = (e) => {
+      listening = false;
+      $("mic").classList.remove("on");
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+        wakeOn = false;
+        setNote("Microphone blocked — type instead", "warn");
+      } else if (e.error !== "no-speech" && e.error !== "aborted") {
+        setNote("Mic: " + e.error, "warn");
+      }
+      paintWake();
+    };
+
     rec.onresult = (e) => {
       let final = "", interim = "";
-      for (const r of e.results) (r.isFinal ? (final += r[0].transcript) : (interim += r[0].transcript));
-      if (interim) $("inp").value = interim;
-      if (final) submit(final);
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const r = e.results[i];
+        if (r.isFinal) final += r[0].transcript; else interim += r[0].transcript;
+      }
+      if (manual && interim) $("inp").value = interim;
+      if (!final) return;
+
+      if (manual) { manual = false; submit(final); return; }
+      if (!wakeOn) return;
+
+      const m = WAKE.exec(final);
+      if (!m) return;                             // ambient chatter: ignore entirely
+      const cmd = final.slice(m.index + m[0].length).replace(/^[\s,.:;-]+/, "").trim();
+      setOpen(true);
+      if (cmd) submit(cmd);
+      else { setNote("Yes? Go ahead", null); $("inp").focus(); }
     };
-    $("mic").onclick = () => { setOpen(true); on ? rec.stop() : rec.start(); };
+
+    $("mic").onclick = () => {
+      setOpen(true);
+      manual = true;
+      if (listening) { try { rec.stop(); } catch (_) {} setTimeout(startRec, 200); }
+      else startRec();
+    };
+
+    $("wake").onclick = () => {
+      wakeOn = !wakeOn;
+      if (wakeOn) startRec();
+      else if (listening) { try { rec.stop(); } catch (_) {} }
+      setNote(wakeOn ? "Listening for “hey KODA”" : "Wake word off — press the mic or type", null);
+      paintWake();
+    };
+
+    startRec();
+    paintWake();
   }
   }
 })()

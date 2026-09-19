@@ -168,6 +168,22 @@ export class Pipeline {
           description = "Go back";
           await this.browser.back();
           break;
+        case "go_forward":
+          description = "Go forward";
+          await this.browser.forward();
+          break;
+        case "scroll_top":
+          description = "Jump to the top";
+          await this.browser.scrollEdge("top");
+          break;
+        case "scroll_bottom":
+          description = "Jump to the bottom";
+          await this.browser.scrollEdge("bottom");
+          break;
+        case "reload":
+          description = "Reload the page";
+          await this.browser.reload();
+          break;
         default:
           description = "No action (request unclear)";
           ok = false;

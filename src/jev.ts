@@ -73,6 +73,10 @@ export function buildQuestions(transcript: string, page: PageSnapshot) {
         scroll_down: "Scroll further down / read more of the current page",
         scroll_up: "Scroll back up toward the top of the current page",
         go_back: "Return to the previous page",
+        go_forward: "Move forward again after going back",
+        scroll_top: "Jump all the way to the top / beginning of the page",
+        scroll_bottom: "Jump all the way to the bottom / end of the page",
+        reload: "Reload or refresh the current page",
         unclear: "The request is not a browser action, or is too ambiguous to act on",
       },
     ),
@@ -204,4 +208,4 @@ export function topK(probabilities: Record<string, number>, k = 5): { id: string
     .slice(0, k);
 }
 
-export const INTENTS: Intent[] = ["click_link", "search", "scroll_down", "scroll_up", "go_back", "unclear"];
+export const INTENTS: Intent[] = ["click_link", "search", "scroll_down", "scroll_up", "go_back", "go_forward", "scroll_top", "scroll_bottom", "reload", "unclear"];
