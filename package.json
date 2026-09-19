@@ -1,0 +1,28 @@
+{
+  "name": "jev-voice-wiki",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Voice-driven Wikipedia navigation powered by TypeSafe Jev, with a live cost/latency dashboard",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "smoke": "tsx scripts/smoke.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@typesafe-ai/sdk": "^0.6.0",
+    "dotenv": "^18.0.1",
+    "express": "^5.2.1",
+    "playwright": "^1.63.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.6.2",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2"
+  }
+}

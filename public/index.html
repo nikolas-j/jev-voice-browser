@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Jev · Voice Wikipedia</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<header>
+  <div class="brand">
+    <span class="dot" id="conn"></span>
+    <h1>Jev drives Wikipedia</h1>
+    <span class="sub">voice → TypeSafe System One → browser</span>
+  </div>
+  <div class="totals" id="totals">
+    <div class="stat"><span class="k">runs</span><span class="v" id="t-runs">0</span></div>
+    <div class="stat"><span class="k">model calls</span><span class="v" id="t-calls">0</span></div>
+    <div class="stat"><span class="k">input tokens</span><span class="v" id="t-tokens">0</span></div>
+    <div class="stat"><span class="k">model time</span><span class="v" id="t-model">0 ms</span></div>
+    <div class="stat"><span class="k">total cost</span><span class="v cost" id="t-cost">$0.000000</span></div>
+  </div>
+</header>
+
+<main>
+  <section class="control">
+    <button id="mic" class="mic" title="Hold to talk, or click to toggle">
+      <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11z"/></svg>
+    </button>
+    <div class="input-row">
+      <input id="text" type="text" placeholder="…or type a command: “open the page about James Watt”, “search for Ada Lovelace”, “go to the history section”" autocomplete="off" />
+      <button id="send">Send</button>
+    </div>
+    <div class="hint" id="hint">Click the mic and speak. Uses the browser's Web Speech API (Chrome/Edge).</div>
+    <div class="interim" id="interim"></div>
+  </section>
+
+  <section class="timeline-wrap">
+    <div class="timeline-head">
+      <h2>Live run log</h2>
+      <button id="clear" class="ghost">clear view</button>
+    </div>
+    <div id="timeline" class="timeline"></div>
+  </section>
+</main>
+
+<template id="run-tpl">
+  <article class="run">
+    <div class="run-head">
+      <span class="badge src"></span>
+      <span class="transcript"></span>
+      <span class="run-meta"></span>
+    </div>
+    <div class="run-body"></div>
+  </article>
+</template>
+
+<script src="app.js"></script>
+</body>
+</html>
