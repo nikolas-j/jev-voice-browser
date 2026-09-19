@@ -25,6 +25,21 @@ export interface ModelCall {
   requestId?: string;
 }
 
+export interface ShadowResult {
+  model: string;
+  pickedId: string;
+  confidence: number;
+  latencyMs: number;
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+  agrees: boolean;
+  /** baseline latency / jev latency — how many times faster Jev was on this decision */
+  speedup: number;
+  /** baseline cost / jev cost */
+  costRatio: number;
+}
+
 export interface Candidate {
   id: string;
   label: string;
@@ -52,6 +67,7 @@ export type JevEvent =
   | { type: "action"; runId: string; description: string; durationMs: number; ok: boolean; detail?: string }
   | { type: "run_done"; runId: string; totalMs: number; totalCostUsd: number }
   | { type: "error"; runId: string; message: string }
+  | { type: "shadow"; runId: string; result?: ShadowResult; error?: string }
   | { type: "calibration"; summary: CalibrationSummary }
   | { type: "totals"; runs: number; calls: number; inputTokens: number; costUsd: number; modelMs: number; wallMs: number };
 

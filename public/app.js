@@ -82,10 +82,46 @@ function renderCalibration(sum) {
   }
 }
 
+// Running medians of the measured Jev-vs-LLM comparison.
+const shadowRuns = [];
+const median = (xs) => { const a = [...xs].sort((x, y) => x - y); return a.length ? a[Math.floor(a.length / 2)] : 0; };
+
+function renderShadow(ev) {
+  const r = getRun(ev.runId);
+  if (ev.error) { step(r, "baseline", `<div class="metrics"><span>baseline unavailable: ${esc(ev.error)}</span></div>`); return; }
+  const s = ev.result;
+  shadowRuns.push(s);
+  step(r, "baseline", `<div class="shadow-line">
+      <span><span class="model-tag">${esc(s.model)}</span> picked <b>${esc(s.pickedId)}</b> ${Number.isFinite(s.confidence) ? `at ${pct(s.confidence)}` : ""}</span>
+      <span class="${s.agrees ? "win" : "disagree"}">${s.agrees ? "same answer" : "different answer"}</span>
+    </div>
+    <div class="metrics">
+      <span>latency <b>${fmtMs(s.latencyMs)}</b> vs <b>${fmtMs(s.latencyMs / (s.speedup || 1))}</b></span>
+      <span><b>${s.inputTokens.toLocaleString()}</b> in / <b>${s.outputTokens}</b> out</span>
+      ${s.costUsd > 0 ? `<span class="cost"><b>${fmtUsd(s.costUsd)}</b></span>` : ""}
+      ${s.speedup > 0 ? `<span class="win"><b>${s.speedup.toFixed(1)}×</b> faster</span>` : ""}
+      ${s.costRatio > 0 ? `<span class="win"><b>${s.costRatio.toFixed(0)}×</b> cheaper</span>` : ""}
+    </div>`);
+
+  $("baseline").hidden = false;
+  const sp = median(shadowRuns.map((x) => x.speedup).filter(Boolean));
+  const co = median(shadowRuns.map((x) => x.costRatio).filter(Boolean));
+  const ag = shadowRuns.filter((x) => x.agrees).length;
+  $("b-speed").textContent = sp ? `${sp.toFixed(1)}×` : "—";
+  $("b-cost").textContent = co ? `${co.toFixed(0)}×` : "—";
+  $("b-agree").textContent = `${ag}/${shadowRuns.length}`;
+  $("b-note").innerHTML = co
+    ? `Median over <b>${shadowRuns.length}</b> decision${shadowRuns.length === 1 ? "" : "s"}, same question to both models.`
+    : `Set <b>SHADOW_PRICE_IN_PER_M</b> in .env to get a cost multiple.`;
+}
+
 function handle(ev) {
   switch (ev.type) {
     case "calibration":
       renderCalibration(ev.summary);
+      return;
+    case "shadow":
+      renderShadow(ev);
       return;
     case "totals":
       $("t-runs").textContent = ev.runs;

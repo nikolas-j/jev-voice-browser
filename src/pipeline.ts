@@ -4,6 +4,7 @@ import { WikiBrowser, type PageLink, type PageSnapshot } from "./browser.js";
 import { bus, type Candidate, type Intent } from "./events.js";
 import { decide, topK, NO_LINK } from "./jev.js";
 import { calibration } from "./calibration.js";
+import { shadowCompare } from "./shadow.js";
 
 // Thresholds on the top probability of the chosen candidate. Tune on real usage.
 export const THRESHOLDS = {
@@ -86,6 +87,20 @@ export class Pipeline {
         });
       }
       bus.publish({ type: "calibration", summary: calibration.summary() });
+
+      // Same decision, frontier LLM, measured side by side. Never blocks the pipeline.
+      if (intent === "click_link" && linkTop[0]) {
+        const calls = bus.snapshot().flatMap((e) => (e.type === "model_call" && e.runId === runId ? [e.call] : []));
+        if (calls.length) {
+          shadowCompare(runId, transcript, page, {
+            id: linkTop[0].id,
+            probability: linkTop[0].probability,
+            latencyMs: calls.reduce((acc, c) => acc + c.latencyMs, 0),
+            inputTokens: calls.reduce((acc, c) => acc + c.inputTokens, 0),
+            costUsd: calls.reduce((acc, c) => acc + c.costUsd, 0),
+          });
+        }
+      }
 
       if (routing === "execute") {
         await this.execute(runId, page, intent, linkTop[0]?.id, queryTop[0]?.id);

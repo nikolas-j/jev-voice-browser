@@ -147,3 +147,9 @@ button.ghost { background: transparent; color: var(--muted); }
 .rate button.picked-ok { color: var(--ok); border-color: var(--ok); }
 .rate button.picked-bad { color: var(--bad); border-color: var(--bad); }
 .rate.done button { cursor: default; opacity: .75; }
+
+.baseline { border-top: 1px solid var(--line); padding-top: 12px; display: flex; flex-direction: column; gap: 10px; }
+.baseline h3 { font-size: 11px; margin: 0; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.shadow-line { display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline; }
+.shadow-line .win { color: var(--ok); font-weight: 600; }
+.shadow-line .disagree { color: var(--warn); }
