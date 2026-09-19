@@ -38,6 +38,7 @@ const EXCLUDED_NAMESPACES = /^\/wiki\/(File|Special|Help|Category|Template|Wikip
 export interface OverlayState {
   phase: "clarify" | "done" | "error";
   runId?: string;
+  intent?: string;
   top?: number;
   escalated?: boolean;
   confident?: boolean;

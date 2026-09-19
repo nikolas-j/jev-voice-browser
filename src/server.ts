@@ -39,6 +39,7 @@ bus.on("event", (ev) => {
       void browser.pushOverlay({
         phase: "clarify",
         runId: ev.runId,
+        intent: ev.intent,
         top,
         escalated: ev.routing === "escalate",
         candidates: cands.map((c) => ({ id: c.id, label: c.label, probability: c.probability })),

@@ -32,5 +32,39 @@
     "routing": "execute",
     "ts": 1789812082473,
     "resolved": false
+  },
+  {
+    "runId": "run-mu884pn6-2",
+    "kind": "query",
+    "predictedId": "Ada Lovelace",
+    "predictedLabel": "Ada Lovelace",
+    "probability": 1,
+    "routing": "execute",
+    "ts": 1789812467470,
+    "resolved": true,
+    "correct": true,
+    "via": "feedback"
+  },
+  {
+    "runId": "run-mu884xri-4",
+    "kind": "query",
+    "predictedId": "steam engines",
+    "predictedLabel": "steam engines",
+    "probability": 1,
+    "routing": "execute",
+    "ts": 1789812477410,
+    "resolved": false
+  },
+  {
+    "runId": "run-mu8856ug-5",
+    "kind": "link",
+    "predictedId": "S001",
+    "predictedLabel": "History",
+    "probability": 0.92,
+    "routing": "execute",
+    "ts": 1789812490547,
+    "resolved": true,
+    "correct": true,
+    "via": "feedback"
   }
 ]

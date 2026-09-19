@@ -10,7 +10,7 @@
 
   function mount() {
   window.__sxMounted = true;
-  console.log('[paula] mounting, readyState=' + document.readyState);
+  console.log('[koda] mounting, readyState=' + document.readyState);
 
   const ACCENT = "#2D6A4F"; // forest green
   const host = document.createElement("div");
@@ -107,7 +107,7 @@
   <div class="panel hidden" id="panel">
     <div class="hd">
       <span class="mark">${micSvg()}</span>
-      <h1 id="title">Paula</h1>
+      <h1 id="title">KODA</h1>
       <button class="x" id="close" title="Collapse">&times;</button>
     </div>
     <div class="bd">
@@ -140,7 +140,7 @@
 
   <button class="pill" id="pill">
     <span class="mark">${micSvg()}</span>
-    <span class="lbl">Paula</span>
+    <span class="lbl">KODA</span>
     <span class="sub" id="pillSub">ask this page</span>
   </button>
 </div>`;
@@ -150,9 +150,18 @@
   }
 
   document.body.appendChild(host);
-  console.log('[paula] overlay mounted into <body>');
+  console.log('[koda] overlay mounted into <body>');
   const $ = (id) => root.getElementById(id);
   const send = (msg) => window.__sxBridge && window.__sxBridge(JSON.stringify(msg));
+
+  // What KODA can actually do. The intent set is closed on purpose: it only ever picks from these.
+  const CAPABILITIES = [
+    "go to the history section",
+    "open the page about steam engines",
+    "search for Ada Lovelace",
+    "scroll down",
+    "go back",
+  ];
 
   const SUGGESTIONS = [
     "go to the history section",
@@ -201,6 +210,8 @@
 
   let currentRun = null;
   $("cand").addEventListener("click", (e) => {
+    const retry = e.target.closest("button[data-try]");
+    if (retry) { $("ask").classList.add("hidden"); submit(retry.dataset.try); return; }
     const b = e.target.closest("button[data-id]");
     if (!b || !currentRun) return;
     $("ask").classList.add("hidden");
@@ -219,7 +230,18 @@
   // Called from Node after every decision / action.
   window.__sxUpdate = (s) => {
     currentRun = s.runId || currentRun;
-    if (s.phase === "clarify") {
+    if (s.phase === "clarify" && s.intent === "unclear") {
+      // Not an ambiguous target — a request KODA cannot carry out at all. Say so, and say what it can do.
+      busy(false);
+      setOpen(true);
+      $("ask").classList.remove("hidden");
+      $("askT").textContent = "I can move around this page, but I can't answer questions yet";
+      $("askS").textContent = "I navigate, I don't read aloud or summarise. Try one of these instead:";
+      $("cand").innerHTML = CAPABILITIES.map(
+        (c) => `<button data-try="${escapeHtml(c)}"><span class="nm">${escapeHtml(c)}</span></button>`,
+      ).join("");
+      setNote("Out of scope — not a guess I'm willing to make", "warn");
+    } else if (s.phase === "clarify") {
       busy(false);
       setOpen(true);
       $("ask").classList.remove("hidden");

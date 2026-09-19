@@ -1,9 +1,9 @@
 {
-  "name": "paula",
+  "name": "koda",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Paula — an in-page assistant that acts when it is sure, asks when it is not, and measures whether its confidence was honest",
+  "description": "KODA — an in-page assistant that acts when it is sure, asks when it is not, and measures whether its confidence was honest",
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
